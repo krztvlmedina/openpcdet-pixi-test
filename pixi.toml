@@ -1,0 +1,30 @@
+[workspace]
+authors = ["Cristobal Medina <krztvl@gmail.com>"]
+channels = ["https://prefix.dev/conda-forge", "pytorch", "https://prefix.dev/nvidia", "numba", "open3d-admin"]
+name = "openpcdet-test"
+platforms = ["linux-64"]
+version = "0.1.0"
+preview = ["pixi-build"]
+
+[dependencies]
+python = ">=3.6, <=3.11"
+cuda = {version = "==12.1.0"}
+openpcdet = { path = "."}
+
+[pypi-dependencies]
+setuptools = { version = "*", index = "https://download.pytorch.org/whl/cu121" }
+opencv-python = "*"
+torch = { version = "==2.1.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
+torchvision = { version = "==0.16.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
+spconv-cu120 = "*"
+nvidia-cudnn-cu11 = {version = "*", index = "https://download.pytorch.org/whl/cu121"}
+
+[package]
+name = "openpcdet"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "==0.3.2" }
+
+[package.host-dependencies] 
+hatchling = "==1.26.3"

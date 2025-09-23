@@ -1,0 +1,59 @@
+services:
+  openpcdet:
+    build:
+      dockerfile: openpcdet.Dockerfile
+    image: openpcdet:latest
+    container_name: velodyne_openpcdet  
+      # - ./external:/external
+    # command: ["bash"]
+    # command: bash -c "pixi install -e pifenet && tail -f /dev/null"
+    command: bash -c "tail -f /dev/null"
+    stdin_open: true # docker run -i
+    runtime: nvidia
+    network_mode: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities:
+              - gpu
+    volumes:
+      # - ${PWD}/OpenPCDet:/openpcdet:cached
+      # - ${PWD}/.pixi/pifenet.pixi.toml:/workspaces/pifenet/pixi.toml
+      - ${PWD}/pretrained-models/:/workspaces/pifenet/pretrained-models
+    develop:
+      # Create a `watch` configuration to update the app
+      # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
+      watch:
+        # Sync the working directory with the `/app` directory in the container
+        - action: sync
+          path: .
+          target: /app
+          # Exclude the project virtual environment — it could be for a
+          # different platform in the container
+          ignore:
+            - .venv/
+
+        # Rebuild the image if dependencies change by checking uv.lock
+        - action: rebuild
+          path: ./pyproject.toml
+  velodyne_ros:
+    build:
+      dockerfile: ros2.pixi.Dockerfile
+    image: velodyne_ros2:latest
+    container_name: velodyne_ros2
+    network_mode: "host"
+    ipc: host
+    command: bash -c "tail -f /dev/null"
+    # Needed to display graphical applications
+    privileged: true
+    environment:
+      # Allows graphical programs in the container.
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      # Allows graphical programs in the container.
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
+    tty: true
