@@ -1,15 +1,52 @@
 [workspace]
-authors = ["Cristobal Medina <krztvl@gmail.com>"]
-channels = ["https://prefix.dev/conda-forge", "pytorch", "https://prefix.dev/nvidia", "numba", "open3d-admin"]
 name = "openpcdet-test"
-platforms = ["linux-64"]
 version = "0.1.0"
+description = "Pixified openpcdet."
+authors = ["Cristobal Medina <krztvl@gmail.com>"]
+channels = [
+    "https://prefix.dev/conda-forge", 
+    "pytorch", 
+    "https://prefix.dev/nvidia", 
+    "numba", 
+    "open3d-admin"
+    ]
+platforms = ["linux-64"]
 preview = ["pixi-build"]
 
 [dependencies]
 python = ">=3.6, <=3.11"
+pixi-build-api-version = {version = "1.*", channel = "https://prefix.dev/pixi-build-backends"}
+setuptools = "<=58.2.0"
 cuda = {version = "==12.1.0"}
-openpcdet = { path = "."}
+numpy = "*"
+llvmlite = "*"
+numba = "*"
+tensorboardX = "*"
+pyyaml = "*"
+scikit-image = "*"
+tqdm = "*"
+SharedArray = "*"
+opencv-python = "*"
+
+colcon-common-extensions = "*"
+ros-humble-joint-state-publisher = "*"
+ros-humble-xacro = "*"
+ros-humble-ros-ign-bridge = "*"
+ros-humble-ros-ign-gazebo = "*"
+ros-humble-ros-ign-image = "*"
+ros-humble-ros-ign-interfaces = "*"
+ros-humble-slam-toolbox = "*"
+ros-humble-nav2-bringup = "*"
+ros-humble-navigation2  = "*"	
+ros-humble-rviz2 = "*"
+
+openpcdet = { path = "./src/openpcdet" }
+
+# For openpcdet ROS2 wrapper
+ros-humble-ros2-numpy = { path = "./src/ros2_numpy" }
+ros-humble-pcdet-ros2 = { path = "./src/pcdet_ros2"}
+catkin_pkg = "*"
+nose = "*"
 
 [pypi-dependencies]
 setuptools = { version = "*", index = "https://download.pytorch.org/whl/cu121" }
@@ -19,12 +56,9 @@ torchvision = { version = "==0.16.0+cu121", index = "https://download.pytorch.or
 spconv-cu120 = "*"
 nvidia-cudnn-cu11 = {version = "*", index = "https://download.pytorch.org/whl/cu121"}
 
-[package]
-name = "openpcdet"
-version = "0.1.0"
-
-[package.build]
-backend = { name = "pixi-build-python", version = "==0.3.2" }
-
-[package.host-dependencies] 
-hatchling = "==1.26.3"
+#For openpcdet ROS2 wrapper
+kornia = "*" 
+open3d = "*"
+pyquaternion = "*"
+transform3d = "*"
+easydict = "*"

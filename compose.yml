@@ -1,9 +1,9 @@
 services:
-  openpcdet:
+  openpcdet-pixi:
     build:
       dockerfile: openpcdet.Dockerfile
-    image: openpcdet:latest
-    container_name: velodyne_openpcdet  
+    image: openpcdet_pixi:latest
+    container_name: velodyne_openpcdet_pixi 
       # - ./external:/external
     # command: ["bash"]
     # command: bash -c "pixi install -e pifenet && tail -f /dev/null"
@@ -18,9 +18,50 @@ services:
             - capabilities:
               - gpu
     volumes:
-      # - ${PWD}/OpenPCDet:/openpcdet:cached
+      - ${PWD}/src/ros2_numpy:/project/src/ros2_numpy:cached
+      - ${PWD}/src/pcdet_ros2:/project/src/pcdet_ros2:cached
+      - ${PWD}/src/lidar:/project/src/lidar:cached
       # - ${PWD}/.pixi/pifenet.pixi.toml:/workspaces/pifenet/pixi.toml
-      - ${PWD}/pretrained-models/:/workspaces/pifenet/pretrained-models
+      - ${PWD}/pretrained-models/:/project/data/pretrained-models
+    develop:
+      # Create a `watch` configuration to update the app
+      # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
+      watch:
+        # Sync the working directory with the `/app` directory in the container
+        - action: sync
+          path: .
+          target: /app
+          # Exclude the project virtual environment — it could be for a
+          # different platform in the container
+          ignore:
+            - .venv/
+
+        # Rebuild the image if dependencies change by checking uv.lock
+        - action: rebuild
+          path: ./pyproject.toml
+
+  openpcdet-prebuilt:
+    build:
+      dockerfile: src/openpcdet/docker/cu116.Dockerfile
+    image: openpcdet:latest
+    container_name: velodyne_openpcdet
+      # - ./external:/external
+    # command: ["bash"]
+    # command: bash -c "pixi install -e pifenet && tail -f /dev/null"
+    command: bash -c "tail -f /dev/null"
+    stdin_open: true # docker run -i
+    runtime: nvidia
+    network_mode: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities:
+              - gpu
+    volumes:
+      - ${PWD}/src/lidar:/project/src/lidar:cached
+      # - ${PWD}/.pixi/pifenet.pixi.toml:/workspaces/pifenet/pixi.toml
+      - ${PWD}/pretrained-models/:/project/data/pretrained-models
     develop:
       # Create a `watch` configuration to update the app
       # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
@@ -53,6 +94,9 @@ services:
       - QT_X11_NO_MITSHM=1
       - NVIDIA_DRIVER_CAPABILITIES=all
     volumes:
+      - ${PWD}/src/ros2_numpy:/app/ros2_numpy:cached
+      - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
+      - ${PWD}/.pixi/ros2.pixi.toml:/app/pixi.toml
       # Allows graphical programs in the container.
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw

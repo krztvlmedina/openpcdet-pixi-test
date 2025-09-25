@@ -14,18 +14,18 @@ RUN echo "#!/bin/bash" > /app/entrypoint.sh
 RUN cat /shell-hook >> /app/entrypoint.sh
 # extend the shell-hook script to run the command passed to the container
 RUN echo 'exec "$@"' >> /app/entrypoint.sh && chmod 0755 /app/entrypoint.sh
-RUN pixi add ros-humble-desktop-full ros-humble-turtlesim colcon-common-extensions \
-	"setuptools<=58.2.0" \
-	ros-humble-joint-state-publisher \
-	ros-humble-xacro \
-	ros-humble-ros-ign-bridge \
-	ros-humble-ros-ign-gazebo \
-	ros-humble-ros-ign-image \
-	ros-humble-ros-ign-interfaces \
-	ros-humble-slam-toolbox \
-	ros-humble-nav2-bringup \
-	ros-humble-navigation2 \
-	ros-humble-rviz2
+# RUN pixi add ros-humble-desktop-full ros-humble-turtlesim colcon-common-extensions \
+# 	"setuptools<=58.2.0" \
+# 	ros-humble-joint-state-publisher \
+# 	ros-humble-xacro \
+# 	ros-humble-ros-ign-bridge \
+# 	ros-humble-ros-ign-gazebo \
+# 	ros-humble-ros-ign-image \
+# 	ros-humble-ros-ign-interfaces \
+# 	ros-humble-slam-toolbox \
+# 	ros-humble-nav2-bringup \
+# 	ros-humble-navigation2 \
+# 	ros-humble-rviz2
 
 ENTRYPOINT [ "/app/entrypoint.sh" ]
 # CMD ["pixi", "shell"]
