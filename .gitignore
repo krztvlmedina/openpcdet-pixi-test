@@ -2,5 +2,5 @@
 .pixi/*
 !.pixi/config.toml
 data/*
-src/openpcdet
-src/ros2_numpy
+src/openpcdet/*
+src/ros2_numpy/*
