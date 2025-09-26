@@ -22,7 +22,7 @@ services:
       - ${PWD}/src/pcdet_ros2:/project/src/pcdet_ros2:cached
       - ${PWD}/src/lidar:/project/src/lidar:cached
       # - ${PWD}/.pixi/pifenet.pixi.toml:/workspaces/pifenet/pixi.toml
-      - ${PWD}/pretrained-models/:/project/data/pretrained-models
+      - ${PWD}/data/pretrained-models/:/project/data/pretrained-models
     develop:
       # Create a `watch` configuration to update the app
       # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
@@ -61,7 +61,7 @@ services:
     volumes:
       - ${PWD}/src/lidar:/project/src/lidar:cached
       # - ${PWD}/.pixi/pifenet.pixi.toml:/workspaces/pifenet/pixi.toml
-      - ${PWD}/pretrained-models/:/project/data/pretrained-models
+      - ${PWD}/data/pretrained-models/:/project/data/pretrained-models
     develop:
       # Create a `watch` configuration to update the app
       # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
@@ -94,34 +94,34 @@ services:
       - QT_X11_NO_MITSHM=1
       - NVIDIA_DRIVER_CAPABILITIES=all
     volumes:
-      - ${PWD}/src/ros2_numpy:/app/ros2_numpy:cached
-      - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
+      # - ${PWD}/src/ros2_numpy:/app/ros2_numpy:cached
+      # - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
       - ${PWD}/.pixi/ros2.pixi.toml:/app/pixi.toml
       # Allows graphical programs in the container.
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
     tty: true
 
-  velodyne_ros_u18:
-    build:
-      dockerfile: ros2.ubuntu18.pixi.Dockerfile
-    image: velodyne_u18_ros2:latest
-    container_name: velodyne_u18_ros2
-    network_mode: "host"
-    ipc: host
-    command: bash -c "tail -f /dev/null"
-    # Needed to display graphical applications
-    privileged: true
-    environment:
-      # Allows graphical programs in the container.
-      - DISPLAY=${DISPLAY}
-      - QT_X11_NO_MITSHM=1
-      - NVIDIA_DRIVER_CAPABILITIES=all
-    volumes:
-      - ${PWD}/src/ros2_numpy:/app/ros2_numpy:cached
-      - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
-      - ${PWD}/.pixi/ros2.pixi.toml:/app/pixi.toml
-      # Allows graphical programs in the container.
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
-    tty: true
+  # velodyne_ros_u18:
+  #   build:
+  #     dockerfile: ros2.ubuntu18.pixi.Dockerfile
+  #   image: velodyne_u18_ros2:latest
+  #   container_name: velodyne_u18_ros2
+  #   network_mode: "host"
+  #   ipc: host
+  #   command: bash -c "tail -f /dev/null"
+  #   # Needed to display graphical applications
+  #   privileged: true
+  #   environment:
+  #     # Allows graphical programs in the container.
+  #     - DISPLAY=${DISPLAY}
+  #     - QT_X11_NO_MITSHM=1
+  #     - NVIDIA_DRIVER_CAPABILITIES=all
+  #   volumes:
+  #     - ${PWD}/src/ros2_numpy:/app/ros2_numpy:cached
+  #     - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
+  #     - ${PWD}/.pixi/ros2.pixi.toml:/app/pixi.toml
+  #     # Allows graphical programs in the container.
+  #     - /tmp/.X11-unix:/tmp/.X11-unix:rw
+  #     - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
+  #   tty: true

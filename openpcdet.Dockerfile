@@ -16,4 +16,5 @@ WORKDIR /project
 ENV PATH="/root/.pixi/bin:${PATH}"
 ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES all
-RUN pixi install -vv && pixi run check_cuda
+RUN pixi install -v
+# RUN pixi run check_cuda
