@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7-labs
-FROM ubuntu:20.04 AS pixi-image
+FROM ubuntu:22.04 AS pixi-image
 
-RUN apt-get update -y && apt-get install curl -y && apt-get install linux-headers-$(uname -r) -y 
+RUN apt-get update -y && apt-get install curl -y && apt-get install linux-headers-generic -y 
 RUN bash -c "set -euo pipefail; curl -fsSL https://pixi.sh/install.sh -o install.sh; bash install.sh"
 # set -euo pipefail evita que dockerfile falle silenciosamente
 ENV PATH="/root/.pixi/bin:${PATH}"

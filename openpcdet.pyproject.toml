@@ -20,4 +20,8 @@ channels = [
     ]
 
 [tool.pixi.package.host-dependencies] 
-hatchling = "==1.26.3"
+hatchling = "*"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+   

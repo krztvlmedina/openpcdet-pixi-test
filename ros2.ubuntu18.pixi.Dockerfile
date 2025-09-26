@@ -1,0 +1,57 @@
+# syntax=docker/dockerfile:1.7-labs
+# Ubuntu 20.04 fails when installing the packages, particularly the pixi build backends
+FROM ubuntu:24.04 AS build 
+RUN apt-get update -y && apt-get install curl -y && apt-get install linux-headers-generic -y 
+RUN bash -c "set -euo pipefail; curl -fsSL https://pixi.sh/install.sh -o install.sh; bash install.sh"
+# set -euo pipefail evita que dockerfile falle silenciosamente
+ENV PATH="/root/.pixi/bin:${PATH}"
+
+RUN apt-get update -y && apt-get install xorg openbox -y
+# copy source code, pixi.toml and pixi.lock to the container
+COPY ./src/ros2_numpy /app/ros2_numpy/
+COPY ./src/pcdet_ros2 /app/pcdet_ros2/
+COPY .pixi/ros2.pixi.toml /app/pixi.toml
+WORKDIR /app
+# install dependencies to `/app/.pixi/envs/prod`
+# use `--locked` to ensure the lockfile is up to date with pixi.toml
+RUN pixi install -e prod
+# create the shell-hook bash script to activate the environment
+RUN pixi shell-hook -e prod -s bash > /shell-hook
+RUN echo "#!/bin/bash" > /app/entrypoint.sh
+RUN cat /shell-hook >> /app/entrypoint.sh
+# extend the shell-hook script to run the command passed to the container
+RUN echo 'exec "$@"' >> /app/entrypoint.sh && chmod 0755 /app/entrypoint.sh
+# RUN pixi add ros-humble-desktop-full ros-humble-turtlesim colcon-common-extensions \
+# 	"setuptools<=58.2.0" \
+# 	ros-humble-joint-state-publisher \
+# 	ros-humble-xacro \
+# 	ros-humble-ros-ign-bridge \
+# 	ros-humble-ros-ign-gazebo \
+# 	ros-humble-ros-ign-image \
+# 	ros-humble-ros-ign-interfaces \
+# 	ros-humble-slam-toolbox \
+# 	ros-humble-nav2-bringup \
+# 	ros-humble-navigation2 \
+# 	ros-humble-rviz2
+
+ENTRYPOINT [ "/app/entrypoint.sh" ]
+# CMD ["pixi", "shell"]
+CMD ["bash"]
+
+
+# FROM ubuntu:24.04 AS production
+# WORKDIR /app
+# # only copy the production environment into prod container
+# # please note that the "prefix" (path) needs to stay the same as in the build container
+# COPY --from=build /app/.pixi/envs/prod /app/.pixi/envs/prod
+# COPY --from=build --chmod=0755 /app/entrypoint.sh /app/entrypoint.sh
+
+# # # copy your project code into the container as well
+# # COPY ./my_project /app/my_project
+
+# ENTRYPOINT [ "/app/entrypoint.sh" ]
+# # run your app inside the pixi environment
+
+# RUN pixi shell && ros2 run turtlesim turtlesim_node
+# # CMD [ "uvicorn", "my_project:app", "--host", "0.0.0.0" ]
+
