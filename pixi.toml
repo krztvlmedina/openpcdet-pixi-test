@@ -16,6 +16,7 @@ platforms = ["linux-64"]
 preview = ["pixi-build"]
 
 [dependencies]
+openpcdet = { path = "./src/openpcdet"}
 python = ">=3.6, <=3.11"
 # pixi-build-api-version = {version = "1.*", channel = "https://prefix.dev/pixi-build-backends"}
 setuptools = "<=58.2.0"
@@ -30,6 +31,7 @@ tqdm = "*"
 SharedArray = "*"
 
 colcon-common-extensions = "*"
+ros-humble-desktop-full = "*"
 ros-humble-joint-state-publisher = "*"
 ros-humble-xacro = "*"
 ros-humble-ros-ign-bridge = "*"
@@ -41,7 +43,6 @@ ros-humble-nav2-bringup = "*"
 ros-humble-navigation2  = "*"	
 ros-humble-rviz2 = "*"
 
-openpcdet = { path = "./src/openpcdet" }
 
 # For openpcdet ROS2 wrapper
 ros-humble-ament-cmake-nose = "*"
@@ -57,6 +58,7 @@ torch = { version = "==2.1.0+cu121", index = "https://download.pytorch.org/whl/c
 torchvision = { version = "==0.16.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
 spconv-cu120 = "*"
 nvidia-cudnn-cu11 = {version = "*", index = "https://download.pytorch.org/whl/cu121"}
+openpcdet = { path = "./src/openpcdet", editable = true}
 
 #For openpcdet ROS2 wrapper
 kornia = "*" 
@@ -65,3 +67,13 @@ pyquaternion = "*"
 transform3d = "*"
 easydict = "*"
 
+[tasks]
+#these are basically shortcuts to be run in a pixi environment. In the future, I should be able to add my custom nodes with tasks, or something.
+#Source: https://pixi.sh/latest/tutorials/ros2/#simplify-the-user-experience
+
+#https://github.com/atinfinity/pixi_ros2_gazebo_example
+sim = 'ros2 run turtlesim turtlesim_node'
+build = 'colcon build --symlink-install'
+hello = 'ros2 run my_package my_node'
+rviz = 'ros2 run rviz2 rviz2'
+pcdet_ros2 = 'ros2 launch pcdet_ros2 pcdet.launch.py'

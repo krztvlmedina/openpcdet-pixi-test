@@ -12,12 +12,7 @@ name = "openpcdet"
 version = "0.1.0"
 
 [tool.pixi.package.build] 
-backend = { name = "pixi-build-python", version = "*" }
-channels = [
-    "robostack-humble", 
-    "conda-forge", 
-    "https://prefix.dev/pixi-build-backends"
-    ]
+backend = { name = "pixi-build-python", version = "*", channels = ["robostack-humble", "conda-forge", "https://prefix.dev/pixi-build-backends"]}
 
 [tool.pixi.package.host-dependencies] 
 hatchling = "*"

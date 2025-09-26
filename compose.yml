@@ -20,9 +20,11 @@ services:
     volumes:
       - ${PWD}/src/ros2_numpy:/project/src/ros2_numpy:cached
       - ${PWD}/src/pcdet_ros2:/project/src/pcdet_ros2:cached
+      - ${PWD}/src/openpcdet:/project/src/openpcdet:cached
       - ${PWD}/src/lidar:/project/src/lidar:cached
-      # - ${PWD}/.pixi/pifenet.pixi.toml:/workspaces/pifenet/pixi.toml
-      - ${PWD}/data/pretrained-models/:/project/data/pretrained-models
+      - ${PWD}/pixi.toml:/project/pixi.toml
+      # - ${PWD}/data/pretrained-models/:/project/data/pretrained-models
+      - ${PWD}/data/:/project/data/
     develop:
       # Create a `watch` configuration to update the app
       # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
