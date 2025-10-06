@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7-labs
 #
-FROM ghcr.io/prefix-dev/pixi:0.53.0 AS build
-COPY .pixi/ros2.pixi.toml /app/pixi.toml
+FROM ghcr.io/prefix-dev/pixi:0.55.0 AS build
+COPY pixi_confs/ros2.pixi.toml /app/pixi.toml
 RUN apt-get update -y && apt-get install xorg openbox -y
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
@@ -14,6 +14,7 @@ RUN echo "#!/bin/bash" > /app/entrypoint.sh
 RUN cat /shell-hook >> /app/entrypoint.sh
 # extend the shell-hook script to run the command passed to the container
 RUN echo 'exec "$@"' >> /app/entrypoint.sh && chmod 0755 /app/entrypoint.sh
+# RUN echo 'eval "$(pixi completion --shell bash)"' >> /app/entrypoint.sh'
 # RUN pixi add ros-humble-desktop-full ros-humble-turtlesim colcon-common-extensions \
 # 	"setuptools<=58.2.0" \
 # 	ros-humble-joint-state-publisher \
@@ -28,8 +29,7 @@ RUN echo 'exec "$@"' >> /app/entrypoint.sh && chmod 0755 /app/entrypoint.sh
 # 	ros-humble-rviz2
 
 ENTRYPOINT [ "/app/entrypoint.sh" ]
-# CMD ["pixi", "shell"]
-CMD ["bash"]
+CMD ["pixi", "shell"]
 
 
 # FROM ubuntu:24.04 AS production

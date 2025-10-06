@@ -1,0 +1,41 @@
+[project]
+name = "pcdet"
+version = "0.1.0"
+requires-python = ">=3.6, <=3.11"
+
+[build-system] 
+build-backend = "hatchling.build"
+requires = ["hatchling", "setuptools"]
+
+[tool.pixi.package] 
+name = "pcdet"
+version = "0.1.0"
+
+[tool.pixi.package.build] 
+backend = { name = "pixi-build-python", version = "*", channels = ["conda-forge", "https://prefix.dev/pixi-build-backends"]}
+[tool.pixi.package.build-dependencies]
+SharedArray = "*"
+setuptools = "*"
+torch = "*"
+torchvision = "*"
+# [tool.pixi.package.pypi-dependencies]
+# opencv-python = "*"
+# torchvision = { version = "==0.16.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
+# nvidia-cudnn-cu11 = {version = "*", index = "https://download.pytorch.org/whl/cu121"}
+
+[tool.pixi.package.host-dependencies] 
+hatchling = "*"
+scikit-image = "*"
+
+[tool.pixi.package.run-dependencies]
+numpy = "*"
+llvmlite = "*"
+numba = "*"
+tensorboardX = "*"
+pyyaml = "*"
+scikit-image = "*"
+tqdm = "*"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+   

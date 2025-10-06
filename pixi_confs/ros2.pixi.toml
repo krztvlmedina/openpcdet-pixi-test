@@ -1,0 +1,67 @@
+[workspace]
+name = "sample_ros2_project"
+version = "0.1.0"
+description = "Base ROS2 pixi project."
+authors = ["Cristobal Medina <krztvl@gmail.com>"]
+channels = [
+    "robostack-humble", 
+    "conda-forge", 
+    "https://prefix.dev/pixi-build-backends"
+    ]
+# Your project can support multiple platforms, the current platform will be automatically added.
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+
+[dependencies]
+pixi-build-api-version = {version = "1.*", channel = "https://prefix.dev/pixi-build-backends"}
+ros-humble-desktop-full = "*"
+ros-humble-turtlesim = "*"
+colcon-common-extensions = "*"
+setuptools = "<=58.2.0"
+ros-humble-joint-state-publisher = "*"
+ros-humble-xacro = "*"
+ros-humble-ros-ign-bridge = "*"
+ros-humble-ros-ign-gazebo = "*"
+ros-humble-ros-ign-image = "*"
+ros-humble-ros-ign-interfaces = "*"
+ros-humble-slam-toolbox = "*"
+ros-humble-nav2-bringup = "*"
+ros-humble-navigation2  = "*"	
+ros-humble-rviz2 = "*"
+
+# # For openpcdet ROS2 wrapper
+# ros-humble-ament-cmake-nose = "*"
+# ros-humble-ros2-numpy = { path = "ros2_numpy" }
+# ros-humble-pcdet-ros2 = { path = "pcdet_ros2"}
+
+# catkin_pkg = "*"
+# nose = "*"
+
+
+[feature.dev.dependencies]
+pytest = "*"
+ruff = "*"
+mypy = "*"
+
+[environments]
+default = { features = ["dev"], solve-group = "prod" }
+prod = { features = [], solve-group = "prod" }
+
+[tasks]
+#these are basically shortcuts to be run in a pixi environment. In the future, I should be able to add my custom nodes with tasks, or something.
+#Source: https://pixi.sh/latest/tutorials/ros2/#simplify-the-user-experience
+
+#https://github.com/atinfinity/pixi_ros2_gazebo_example
+sim = 'ros2 run turtlesim turtlesim_node'
+build = 'colcon build --symlink-install'
+hello = 'ros2 run my_package my_node'
+rviz = 'ros2 run rviz2 rviz2'
+
+# # build-wrapper = "rosdep install -i --from-path src --rosdistro humble -y"
+# build-ros2numpy = "ros2 pkg create --build-type ament_python --destination-directory src/ros2_numpy --node-name ros2_numpy ros2_numpy"
+# build-wrapper = "ros2 pkg create --build-type ament_python --destination-directory src/pcdet_ros2 --node-name pcdet_ros2 pcdet_ros2"
+
+# install-wrapper = {cmd = "colcon build --symlink-install --packages-select ros2_numpy pcdet_ros2 && source install/setup.bash", depends-on =["build-pcdet_ros2", "build-ros2numpy"]}
+
+[activation]
+# Source: https://pixi.sh/latest/tutorials/ros2/#add-activation-scripts

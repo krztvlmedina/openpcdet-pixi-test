@@ -1,0 +1,15 @@
+[package.build.backend]
+channels = [
+    "robostack-humble", 
+    "conda-forge", 
+    "https://prefix.dev/pixi-build-backends"
+    ]
+name = "pixi-build-ros"
+version = "*"
+
+[package.build.config]
+distro = "humble"
+
+[package.run-dependencies]
+# pcdet = { path = "../openpcdet"}
+ros-humble-ros2-numpy = { path = "../ros2_numpy"}

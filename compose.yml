@@ -18,13 +18,15 @@ services:
             - capabilities:
               - gpu
     volumes:
-      - ${PWD}/src/ros2_numpy:/project/src/ros2_numpy:cached
+      - ${PWD}/packages/ros2_numpy:/project/packages/ros2_numpy:cached
       - ${PWD}/src/pcdet_ros2:/project/src/pcdet_ros2:cached
       - ${PWD}/src/openpcdet:/project/src/openpcdet:cached
       - ${PWD}/src/lidar:/project/src/lidar:cached
-      - ${PWD}/pixi.toml:/project/pixi.toml
+      - ${PWD}/pixi_confs/pixi.toml:/project/pixi.toml:cached
+      - ${PWD}/pixi_confs/ros2_numpy.pixi.toml:/project/packages/ros2_numpy/pixi.toml:cached
       # - ${PWD}/data/pretrained-models/:/project/data/pretrained-models
       - ${PWD}/data/:/project/data/
+      - ../datos/ros1_rosbags/:/project/data/ros1_rosbags/:cached
     develop:
       # Create a `watch` configuration to update the app
       # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
@@ -87,7 +89,7 @@ services:
     container_name: velodyne_ros2
     network_mode: "host"
     ipc: host
-    command: bash -c "tail -f /dev/null"
+    command: bash -c "tail -f /dev/null" && pixi run rviz
     # Needed to display graphical applications
     privileged: true
     environment:
@@ -98,7 +100,7 @@ services:
     volumes:
       # - ${PWD}/src/ros2_numpy:/app/ros2_numpy:cached
       # - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
-      - ${PWD}/.pixi/ros2.pixi.toml:/app/pixi.toml
+      - ${PWD}/pixi_confs/ros2.pixi.toml:/app/pixi.toml
       # Allows graphical programs in the container.
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw

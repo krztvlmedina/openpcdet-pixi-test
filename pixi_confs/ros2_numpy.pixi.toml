@@ -1,0 +1,22 @@
+[package.build.backend]
+channels = [
+    "robostack-humble", 
+    "conda-forge", 
+    "https://prefix.dev/pixi-build-backends"
+    ]
+name = "pixi-build-ros"
+version = "*"
+
+[package.build.config]
+distro = "humble"
+extra-package-mappings = [
+    { mapping = {"python3-transforms3d" = {"conda" =  ["transforms3d"]}},"python3-numpy" = {"conda" =  ["numpy"]}, "python3-pytest" = {"conda" =  ["pytest"]}}]
+
+# [package.build-dependencies]
+# transforms3d = "*"
+
+# [package.host-dependencies]
+# transforms3d = "*"
+
+# [package.run-dependencies]
+# transforms3d = "*"
