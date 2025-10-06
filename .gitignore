@@ -1,5 +1,6 @@
 # pixi environments
 .pixi/*
+!./pixi/*
 !.pixi/config.toml
 data/*
 src/openpcdet/*
