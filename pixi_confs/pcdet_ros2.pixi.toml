@@ -5,7 +5,7 @@ channels = [
     "https://prefix.dev/pixi-build-backends"
     ]
 name = "pixi-build-ros"
-version = "*"
+version = "==0.2.0"
 
 [package.build.config]
 distro = "humble"

@@ -6,7 +6,6 @@ authors = ["Cristobal Medina <krztvl@gmail.com>"]
 channels = [
     "robostack-humble", 
     "https://prefix.dev/conda-forge", 
-    "pytorch", 
     "https://prefix.dev/nvidia", 
     "numba", 
     "open3d-admin",
@@ -18,6 +17,9 @@ preview = ["pixi-build"]
 [dependencies]
 #openpcdet = { path = "./src/openpcdet"}
 python = ">=3.6, <=3.11"
+open3d = ">=0.18.0,<0.20"
+mayavi = ">=4.8.2,<5"
+rosbags = ">=0.10.11,<0.11"
 # pixi-build-api-version = {version = "1.*", channel = "https://prefix.dev/pixi-build-backends"}
 #setuptools = "<=58.2.0"
 
@@ -44,16 +46,23 @@ tensorboardX = "*"
 pyyaml = "*"
 scikit-image = "*"
 tqdm = "*"
+easydict = "*"
 SharedArray = "*"
 
 [feature.pcdet.pypi-dependencies]
 setuptools = { version = "*", index = "https://download.pytorch.org/whl/cu121" }
-opencv-python = "*"
+# opencv-python = "*"
 torch = { version = "==2.1.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
 torchvision = { version = "==0.16.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
 spconv-cu120 = "*"
 nvidia-cudnn-cu11 = {version = "*", index = "https://download.pytorch.org/whl/cu121"}
 pcdet = { path = "./src/openpcdet", editable = true}
+kornia = "*" 
+open3d = ">=0.18.0,<0.20"
+mayavi = ">=4.8.2,<5"
+pyquaternion = "*"
+av2 = "*"
+
 
 [feature.ros2.dependencies]
 ros-humble-desktop-full = "*"
@@ -72,7 +81,7 @@ scikit-image = "*"
 
 # For openpcdet ROS2 wrapper
 ros-humble-ament-cmake-nose = "*"
-ros-humble-ros2-numpy = { path = "./packages/ros2_numpy" }
+# ros-humble-ros2-numpy = { path = "./packages/ros2_numpy" }
 ros-humble-pcdet-ros2 = { path = "./packages/pcdet_ros2"}
 catkin_pkg = "*"
 nose = "*"
@@ -82,15 +91,15 @@ lark = "*"
 [feature.ros2.pypi-dependencies]
 #For openpcdet ROS2 wrapper
 kornia = "*" 
-open3d = "*"
+open3d = ">=0.18.0,<0.20"
+mayavi = ">=4.8.2,<5"
 pyquaternion = "*"
+av2 = "*"
 torch = { version = "==2.1.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
 torchvision = { version = "==0.16.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
-transform3d = "*"
 easydict = "*"
 pcdet = { path = "./src/openpcdet", editable = true}
 spconv-cu120 = "*"
-av2 = "*"
 # numpy = "<1.20"
 
 [feature.pcdet.tasks]

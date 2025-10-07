@@ -11,6 +11,12 @@ services:
     stdin_open: true # docker run -i
     runtime: nvidia
     network_mode: host
+    privileged: true
+    environment:
+      # Allows graphical programs in the container.
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_DRIVER_CAPABILITIES=all
     deploy:
       resources:
         reservations:
@@ -18,15 +24,20 @@ services:
             - capabilities:
               - gpu
     volumes:
-      - ${PWD}/packages/ros2_numpy:/project/packages/ros2_numpy:cached
-      - ${PWD}/src/pcdet_ros2:/project/src/pcdet_ros2:cached
-      - ${PWD}/src/openpcdet:/project/src/openpcdet:cached
-      - ${PWD}/src/lidar:/project/src/lidar:cached
-      - ${PWD}/pixi_confs/pixi.toml:/project/pixi.toml:cached
-      - ${PWD}/pixi_confs/ros2_numpy.pixi.toml:/project/packages/ros2_numpy/pixi.toml:cached
+      - ./packages/ros2_numpy:/project/packages/ros2_numpy:cached
+      - ./src/pcdet_ros2:/project/src/pcdet_ros2:cached
+      - ./src/openpcdet:/project/src/openpcdet:cached
+      - ./src/lidar:/project/src/lidar:cached
+
+      - ./pixi_confs/pixi.toml:/project/pixi.toml:cached
+      - ./pixi_confs/ros2_numpy.pixi.toml:/project/packages/ros2_numpy/pixi.toml:cached
+      - ./pixi_confs/pcdet_ros2.pixi.toml:/project/packages/pcdet_ros2/pixi.toml:cached
       # - ${PWD}/data/pretrained-models/:/project/data/pretrained-models
-      - ${PWD}/data/:/project/data/
+      - ./data/:/project/data/
       - ../datos/ros1_rosbags/:/project/data/ros1_rosbags/:cached
+      
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
     develop:
       # Create a `watch` configuration to update the app
       # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
@@ -63,9 +74,9 @@ services:
             - capabilities:
               - gpu
     volumes:
-      - ${PWD}/src/lidar:/project/src/lidar:cached
+      - ./src/lidar:/project/src/lidar:cached
       # - ${PWD}/.pixi/pifenet.pixi.toml:/workspaces/pifenet/pixi.toml
-      - ${PWD}/data/pretrained-models/:/project/data/pretrained-models
+      - ./data/pretrained-models/:/project/data/pretrained-models
     develop:
       # Create a `watch` configuration to update the app
       # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
@@ -100,7 +111,7 @@ services:
     volumes:
       # - ${PWD}/src/ros2_numpy:/app/ros2_numpy:cached
       # - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
-      - ${PWD}/pixi_confs/ros2.pixi.toml:/app/pixi.toml
+      - ./pixi_confs/ros2.pixi.toml:/app/pixi.toml
       # Allows graphical programs in the container.
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
