@@ -1,45 +1,38 @@
+# # old pixi toml
+
 [workspace]
 name = "openpcdet-test"
 version = "0.1.0"
 description = "Pixified openpcdet."
 authors = ["Cristobal Medina <krztvl@gmail.com>"]
 channels = [
-    "robostack-humble", 
-    "https://prefix.dev/conda-forge", 
-    "https://prefix.dev/nvidia", 
-    "numba", 
+    # "robostack-humble",
+    "https://prefix.dev/conda-forge",
+    # "https://prefix.dev/nvidia",
+    "numba",
     "open3d-admin",
-    "https://prefix.dev/pixi-build-backends"
-    ]
+    # "https://prefix.dev/pixi-build-backends",
+]
 platforms = ["linux-64"]
-preview = ["pixi-build"]
+# preview = ["pixi-build"]
 
-[dependencies]
-#openpcdet = { path = "./src/openpcdet"}
-python = ">=3.6, <=3.11"
-open3d = ">=0.18.0,<0.20"
-mayavi = ">=4.8.2,<5"
-rosbags = ">=0.10.11,<0.11"
-# pixi-build-api-version = {version = "1.*", channel = "https://prefix.dev/pixi-build-backends"}
-#setuptools = "<=58.2.0"
-
-[tasks]
-#these are basically shortcuts to be run in a pixi environment. In the future, I should be able to add my custom nodes with tasks, or something.
-#Source: https://pixi.sh/latest/tutorials/ros2/#simplify-the-user-experience
-
-#https://github.com/atinfinity/pixi_ros2_gazebo_example
-sim = 'ros2 run turtlesim turtlesim_node'
-build = 'colcon build --symlink-install'
-hello = 'ros2 run my_package my_node'
-rviz = 'ros2 run rviz2 rviz2'
+# [dependencies]
+# python = ">3.6,<3.11" # Higher then 3.11 is not available for spconv-cu120
+# pytorch = ">1.5"
+# open3d = ">=0.18.0,<0.20"
+# mayavi = ">=4.8.2,<5"
 
 [feature.pcdet.system-requirements]
 cuda = "12.1.0"
 
 [feature.pcdet.dependencies]
-cuda-version = "==12.1.0"
-cuda = {version = "==12.1.0"}
-numpy = "*"
+# cuda-version = "==12.1.0"
+# cuda = { version = "==12.1.0" }
+cuda-version = "*"
+cuda = { version = "*" }
+python = ">3.6,<3.11" # Higher than 3.11 is not available for spconv-cu120
+pytorch = ">1.5"
+wheel = "*"
 llvmlite = "*"
 numba = "*"
 tensorboardX = "*"
@@ -47,68 +40,106 @@ pyyaml = "*"
 scikit-image = "*"
 tqdm = "*"
 easydict = "*"
-SharedArray = "*"
+torchvision = "*"
+SharedArray = "==3.1.0"
+opencv = "*"
+pyquaternion = "*"
 
 [feature.pcdet.pypi-dependencies]
-setuptools = { version = "*", index = "https://download.pytorch.org/whl/cu121" }
+# setuptools = { version = "*", index = "https://download.pytorch.org/whl/cu121" }
 # opencv-python = "*"
-torch = { version = "==2.1.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
-torchvision = { version = "==0.16.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
+# torch = { version = "==2.1.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
+# torchvision = { version = "==0.16.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
 spconv-cu120 = "*"
-nvidia-cudnn-cu11 = {version = "*", index = "https://download.pytorch.org/whl/cu121"}
-pcdet = { path = "./src/openpcdet", editable = true}
-kornia = "*" 
-open3d = ">=0.18.0,<0.20"
-mayavi = ">=4.8.2,<5"
-pyquaternion = "*"
-av2 = "*"
 
+# # Should replace 'python setup.py develop'
+pcdet = { path = "./src/openpcdet", editable=true }
 
-[feature.ros2.dependencies]
-ros-humble-desktop-full = "*"
-ros-humble-joint-state-publisher = "*"
-ros-humble-xacro = "*"
-ros-humble-ros-ign-bridge = "*"
-ros-humble-ros-ign-image = "*"
-ros-humble-ros-ign-interfaces = "*"
-ros-humble-slam-toolbox = "*"
-ros-humble-nav2-bringup = "*"
-ros-humble-navigation2  = "*"	
-colcon-common-extensions = "*"
-SharedArray = "*"
-scikit-image = "*"
+# nvidia-cudnn-cu11 = { version = "*", index = "https://download.pytorch.org/whl/cu121" }
+# kornia = "==0.5.8"
+# open3d = ">=0.18.0,<0.20"
+# mayavi = ">=4.8.2,<5"
+# pyquaternion = "*"
+# av2 = "*"
+# SharedArray = "==3.1.0"
+
+[pypi-options]
+no-build-isolation = ["pcdet"]
+
+[tool.uv]
+constraint-dependencies = ["llvm>0.43.0"]
+
+[tasks]
+#these are basicaly shortcuts to be run in a pixi environment. In the future, I should be able to add my custom nodes with tasks, or something.#Source: https://pixi.sh/latest/tutorials/ros2/#simplify-the-user-experience
+
+#https://github.com/atinfinity/pixi_ros2_gazebo_example
+sim = 'ros2 run turtlesim turtlesim_node'
+build = 'colcon build --symlink-install'
+hello = 'ros2 run my_package my_node'
+rviz = 'ros2 run rviz2 rviz2'
+
+# [feature.ros2.dependencies]
+# ros-humble-desktop-full = "*"
+# ros-humble-joint-state-publisher = "*"
+# ros-humble-xacro = "*"
+# ros-humble-ros-ign-bridge = "*"
+# ros-humble-ros-ign-image = "*"
+# ros-humble-ros-ign-interfaces = "*"
+# ros-humble-slam-toolbox = "*"
+# ros-humble-nav2-bringup = "*"
+# ros-humble-navigation2 = "*"
+# colcon-common-extensions = "*"
+# scikit-image = "*"
+# rosbags = ">=0.10.11,<0.11"
+# # spconv-cu120 = "*"
+
+# # For openpcdet ROS2 wrapper
+# ros-humble-ament-cmake-nose = "*"
+# # ros-humble-ros2-numpy = { path = "./packages/ros2_numpy" }
+# ros-humble-pcdet-ros2 = { path = "./packages/pcdet_ros2" }
+# catkin_pkg = "*"
+# nose = "*"
+# lark-parser = "*"
+# lark = "*"
+
+# [feature.ros2.pypi-dependencies]
+# #For openpcdet ROS2 wrapper
+# kornia = "==0.5.8"
+# open3d = ">=0.18.0,<0.20"
+# mayavi = ">=4.8.2,<5"
+# pyquaternion = "*"
+# av2 = "*"
+# torch = { version = "==2.1.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
+# torchvision = { version = "==0.16.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
+# easydict = "*"
+# pcdet = { path = "./src/openpcdet", editable = true }
 # spconv-cu120 = "*"
+# # numpy = "<1.20"
 
-# For openpcdet ROS2 wrapper
-ros-humble-ament-cmake-nose = "*"
-# ros-humble-ros2-numpy = { path = "./packages/ros2_numpy" }
-ros-humble-pcdet-ros2 = { path = "./packages/pcdet_ros2"}
-catkin_pkg = "*"
-nose = "*"
-lark-parser = "*"
-lark = "*"
+# [feature.pcdet.tasks]
+# build-pcdet = "cd src/openpcdet && python setup.py develop"
 
-[feature.ros2.pypi-dependencies]
-#For openpcdet ROS2 wrapper
-kornia = "*" 
-open3d = ">=0.18.0,<0.20"
-mayavi = ">=4.8.2,<5"
-pyquaternion = "*"
-av2 = "*"
-torch = { version = "==2.1.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
-torchvision = { version = "==0.16.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
-easydict = "*"
-pcdet = { path = "./src/openpcdet", editable = true}
-spconv-cu120 = "*"
-# numpy = "<1.20"
+# [feature.ros2.tasks]
+# # pcdet_ros2 = { cmd = 'ros2 launch pcdet_ros2 pcdet.launch.py', depends-on = ["build-pcdet"] }
+# pcdet_ros2 = { cmd = 'ros2 launch pcdet_ros2 pcdet.launch.py' }
 
-[feature.pcdet.tasks]
-build-pcdet = "cd src/openpcdet && python setup.py develop"
+# [feature.ros2.tasks.convert_rosbag]
+# cmd = 'rosbags-convert --src {{ bag_path}} --dst {{ output_dir }}'
+# args = [
+#     { arg = "bag_path" },
+#     { arg = "output_dir", default = "./data/ros2_bags/converted_bags" },
+# ]
 
-[feature.ros2.tasks]
-# pcdet_ros2 = { cmd = 'ros2 launch pcdet_ros2 pcdet.launch.py', depends-on = ["build-pcdet"] }
-pcdet_ros2 = { cmd = 'ros2 launch pcdet_ros2 pcdet.launch.py'}
+# [feature.ros2.tasks.rosbag_to_npy]
+# cmd = 'python ./src/lidar/tools/ros2bag_to_npy.py --bag-path {{ bag_path }} --topic {{ topic }} --output-dir {{ output_dir }} --npy-path {{ npy_path }} --index {{ msg_index }} --mode {{ mode }}'
+# args = [
+#     { arg = "bag_path"},
+#     { arg = "mode"},
+#     { arg = "topic", default = "/velodyne_points" },
+#     { arg = "output_dir", default = "./data/npy_data/single" },
+#     { arg = "npy_path", default = "./data/npy_data/default.npy" },
+#     { arg = "msg_index", default = "-1" },]
 
 [environments]
-ros = { features = ["ros2"] }
+# ros = { features = ["ros2"] }
 pcdet = { features = ["pcdet"] }

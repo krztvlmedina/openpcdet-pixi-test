@@ -32,6 +32,7 @@ services:
       - ./pixi_confs/pixi.toml:/project/pixi.toml:cached
       - ./pixi_confs/ros2_numpy.pixi.toml:/project/packages/ros2_numpy/pixi.toml:cached
       - ./pixi_confs/pcdet_ros2.pixi.toml:/project/packages/pcdet_ros2/pixi.toml:cached
+      # - ./pixi_confs/openpcdet.pyproject.toml:/project/src/openpcdet/pyproject.toml:cached
       # - ${PWD}/data/pretrained-models/:/project/data/pretrained-models
       - ./data/:/project/data/
       - ../datos/ros1_rosbags/:/project/data/ros1_rosbags/:cached
