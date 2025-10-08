@@ -66,6 +66,7 @@ pcdet = { path = "./src/openpcdet", editable=true }
 [pypi-options]
 no-build-isolation = ["pcdet"]
 
+#https://github.com/astral-sh/uv/issues/6281#issuecomment-2316169696
 [tool.uv]
 constraint-dependencies = ["llvm>0.43.0"]
 
