@@ -1,2 +1,3 @@
 [submodule ".\\src\\openpcdet\\"]
-	url = https://github.com/open-mmlab/OpenPCDet.git
+	path = ".\\src\\openpcdet\\"
+	url = git@github.com:open-mmlab/OpenPCDet.git
