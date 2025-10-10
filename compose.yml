@@ -58,7 +58,7 @@ services:
 
   openpcdet-prebuilt:
     build:
-      dockerfile: src/openpcdet/docker/cu116.Dockerfile
+      dockerfile: cu116.krz.Dockerfile
     image: openpcdet:latest
     container_name: velodyne_openpcdet
       # - ./external:/external
@@ -78,6 +78,10 @@ services:
       - ./src/lidar:/project/src/lidar:cached
       # - ${PWD}/.pixi/pifenet.pixi.toml:/workspaces/pifenet/pixi.toml
       - ./data/pretrained-models/:/project/data/pretrained-models
+      - ./data/:/project/data/
+      - ../datos/ros1_rosbags/:/project/data/ros1_rosbags/:cached
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
     develop:
       # Create a `watch` configuration to update the app
       # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts

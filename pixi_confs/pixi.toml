@@ -8,7 +8,7 @@ authors = ["Cristobal Medina <krztvl@gmail.com>"]
 channels = [
     # "robostack-humble",
     "https://prefix.dev/conda-forge",
-    # "https://prefix.dev/nvidia",
+    "https://prefix.dev/nvidia",
     "numba",
     "open3d-admin",
     # "https://prefix.dev/pixi-build-backends",
@@ -23,25 +23,25 @@ platforms = ["linux-64"]
 # mayavi = ">=4.8.2,<5"
 
 [feature.pcdet.system-requirements]
-cuda = "12.1.0"
+cuda = "12"
 
 [feature.pcdet.dependencies]
 # cuda-version = "==12.1.0"
 # cuda = { version = "==12.1.0" }
-cuda-version = "*"
-cuda = { version = "*" }
-python = ">3.6,<3.11" # Higher than 3.11 is not available for spconv-cu120
+# cuda-version = "*"
+# cuda = { version = "*" }
+python = ">3.7,<3.11" # Higher than 3.11 is not available for spconv-cu120
 pytorch = ">1.5"
 wheel = "*"
-llvmlite = "*"
 numba = "*"
+llvmlite = ">=0.43.0"
 tensorboardX = "*"
 pyyaml = "*"
 scikit-image = "*"
 tqdm = "*"
 easydict = "*"
 torchvision = "*"
-SharedArray = "==3.1.0"
+SharedArray = ">=3.2.3"
 opencv = "*"
 pyquaternion = "*"
 
@@ -52,8 +52,10 @@ pyquaternion = "*"
 # torchvision = { version = "==0.16.0+cu121", index = "https://download.pytorch.org/whl/cu121" }
 spconv-cu120 = "*"
 
+# # This is how you use a git version:
+pcdet = { git = "https://github.com/open-mmlab/OpenPCDet.git"}
 # # Should replace 'python setup.py develop'
-pcdet = { path = "./src/openpcdet", editable=true }
+# pcdet = { path = "./src/openpcdet", editable=true }
 
 # nvidia-cudnn-cu11 = { version = "*", index = "https://download.pytorch.org/whl/cu121" }
 # kornia = "==0.5.8"

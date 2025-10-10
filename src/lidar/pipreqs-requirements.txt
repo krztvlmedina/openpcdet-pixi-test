@@ -1,0 +1,8 @@
+mayavi==4.8.2
+numpy==1.23.0
+numpy==1.17.4
+open3d==0.13.0
+pcdet.egg==info
+ros2_numpy==0.0.5
+rosbags==0.10.11
+torch==1.13.1+cu116
