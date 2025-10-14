@@ -6,4 +6,3 @@ data/*
 src/openpcdet/*
 src/ros2_numpy/*
 src/pcdet_ros2/*
-packages/*

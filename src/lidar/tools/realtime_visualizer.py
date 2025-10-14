@@ -112,8 +112,7 @@ def main():
             # if not vis.poll_events():
             #     break
             predicted_boxes = pred_dicts[0]['pred_boxes']
-            print("Predicted % s" % len(predicted_boxes))
-
+            # print("Predicted % s" % len(predicted_boxes))
             V.update_scene(
                 points=data_dict['points'][:, 1:],
                 pcdFrame=pcdFrame,

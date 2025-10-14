@@ -5,7 +5,7 @@ description = "Base ROS2 pixi project."
 authors = ["Cristobal Medina <krztvl@gmail.com>"]
 channels = [
     "robostack-humble", 
-    "conda-forge", 
+    "https://prefix.dev/conda-forge",
     "https://prefix.dev/pixi-build-backends"
     ]
 # Your project can support multiple platforms, the current platform will be automatically added.
@@ -28,6 +28,9 @@ ros-humble-slam-toolbox = "*"
 ros-humble-nav2-bringup = "*"
 ros-humble-navigation2  = "*"	
 ros-humble-rviz2 = "*"
+
+ros-humble-ros2-numpy = { path = "./packages/ros2_numpy"}
+ros-humble-dynamic-lidar-interpolation = { path = "./packages/dynamic_lidar_interpolation"}
 
 # # For openpcdet ROS2 wrapper
 # ros-humble-ament-cmake-nose = "*"
@@ -56,6 +59,18 @@ sim = 'ros2 run turtlesim turtlesim_node'
 build = 'colcon build --symlink-install'
 hello = 'ros2 run my_package my_node'
 rviz = 'ros2 run rviz2 rviz2'
+
+[tasks.play_velodyne_bag]
+cmd = "ros2 bag play {{ bag_path }} {{ loop }}"
+args = [
+    {arg = "bag_path", default = "data/ros2_bags/rosbag2_2025_10_03-20_38_38/rosbag2_2025_10_03-20_38_38_0.db3"},
+    {arg = "loop", default = "--loop"},]
+[tasks.python_bag]
+cmd = "python {{ script_path }}"
+args = [{arg = "script_path", default = "src/yolo-lidar.py"}]
+# depends-on = [{task = "play_velodyne_bag"}]
+
+[tasks.interpolation_node]
 
 # # build-wrapper = "rosdep install -i --from-path src --rosdistro humble -y"
 # build-ros2numpy = "ros2 pkg create --build-type ament_python --destination-directory src/ros2_numpy --node-name ros2_numpy ros2_numpy"

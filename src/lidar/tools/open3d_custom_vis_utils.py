@@ -196,13 +196,13 @@ def update_scene(points,
             vis.add_geometry(lineSet, reset_bounding_box=False)
 
     if ref_boxes is not None:
-        print("Generating Ref boxes...")
         rf_lineSets = generate_box(ref_boxes, (0, 1, 0), ref_labels, ref_scores)
+        print("Generated % s Ref bounding boxes..." % len(rf_lineSets))
         for lineSet in rf_lineSets:
             pcdFrame.ref_boxes.append(lineSet)
             vis.add_geometry(lineSet, reset_bounding_box=False)
 
-    print("Updating renderer...")
+    # print("Updating renderer...")
     vis.update_renderer()
     vis.run()
 

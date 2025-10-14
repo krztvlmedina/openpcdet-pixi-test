@@ -1,0 +1,44 @@
+[workspace]
+channels = [
+"robostack-humble",
+"https://prefix.dev/conda-forge",
+"https://prefix.dev/pixi-build-backends",
+]
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+
+[tasks]
+# optional helper task — adjust to your package / node name
+start = "ros2 run ultralytics_ros ultralytics_node"
+run_python = "python src/yolo-lidar.py"
+
+[tasks.play_velodyne_bag]
+cmd = "ros2 bag play {{ bag_path }} {{ loop }}"
+args = [
+    {arg = "bag_path", default = "data/ros2_bags/rosbag2_2025_10_03-20_38_38/rosbag2_2025_10_03-20_38_38_0.db3"},
+    {arg = "loop", default = "--loop"},]
+[tasks.python_bag]
+cmd = "python {{ script_path }}"
+args = [{arg = "script_path", default = "src/yolo-lidar.py"}]
+# depends-on = [{task = "play_velodyne_bag"}]
+
+[tasks.interpolation_node]
+cmd = 'ros2 launch dynamic_lidar_interpolation pointcloud_interpolation_launch.py log_level:=info'
+
+[pypi-dependencies]
+torch = "*"
+torchvision = ">=0.23.0, <0.24"
+
+[dependencies]
+# RoboStack runtime pieces (rclpy etc.)
+ros-humble-rclpy = "*"
+# ros_numpy = "*"
+python = ">=3.10,<3.12"
+open3d = "*"
+ros-humble-desktop = "*"
+ultralytics = "*"
+numpy = "*"
+ros-humble-ros2-numpy = { path = "./packages/ros2_numpy"}
+ros-humble-dynamic-lidar-interpolation = { path = "./packages/dynamic_lidar_interpolation"}
+scipy = "*"
+

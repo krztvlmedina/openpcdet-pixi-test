@@ -1,0 +1,3 @@
+[submodule "pcdet_ros2"]
+	path = pcdet_ros2
+	url = https://github.com/pradhanshrijal/pcdet_ros2

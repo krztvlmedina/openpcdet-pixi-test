@@ -2,6 +2,8 @@
 #
 FROM ghcr.io/prefix-dev/pixi:0.55.0 AS build
 COPY pixi_confs/ros2.pixi.toml /app/pixi.toml
+COPY packages/ros2_numpy /app/packages/ros2_numpy
+COPY packages/dynamic_lidar_interpolation /app/packages/dynamic_lidar_interpolation
 RUN apt-get update -y && apt-get install xorg openbox -y
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app

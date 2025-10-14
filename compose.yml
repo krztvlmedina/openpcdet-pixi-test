@@ -75,11 +75,13 @@ services:
             - capabilities:
               - gpu
     volumes:
-      - ./src/lidar:/project/src/lidar:cached
+      - ./src/lidar:/OpenPCDet/src/lidar:cached
       # - ${PWD}/.pixi/pifenet.pixi.toml:/workspaces/pifenet/pixi.toml
-      - ./data/pretrained-models/:/project/data/pretrained-models
-      - ./data/:/project/data/
-      - ../datos/ros1_rosbags/:/project/data/ros1_rosbags/:cached
+      - ./data/pretrained-models/:/OpenPCDet/data/pretrained-models
+      - ./data/kitti/training:/OpenPCDet/data/kitti/training
+      - ./data/kitti/testing:/OpenPCDet/data/kitti/testing
+      - ./data/npy_data:/OpenPCDet/data/npy_data/:cached
+      - ../datos/ros1_rosbags/:/OpenPCDet/data/ros1_rosbags/:cached
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
     develop:
@@ -116,6 +118,8 @@ services:
     volumes:
       # - ${PWD}/src/ros2_numpy:/app/ros2_numpy:cached
       # - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
+      - ./data/ros2_bags:/app/ros2_bags:cached
+      - ./data/interpolated_bags:/app/interpolated_bags:cached
       - ./pixi_confs/ros2.pixi.toml:/app/pixi.toml
       # Allows graphical programs in the container.
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
