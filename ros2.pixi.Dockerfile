@@ -2,16 +2,20 @@
 #
 FROM ghcr.io/prefix-dev/pixi:0.55.0 AS build
 COPY pixi_confs/ros2.pixi.toml /app/pixi.toml
+
 COPY packages/ros2_numpy /app/packages/ros2_numpy
+COPY pixi_confs/ros2_numpy.pixi.toml /app/packages/ros2_numpy/pixi.toml
+
 COPY packages/dynamic_lidar_interpolation /app/packages/dynamic_lidar_interpolation
+COPY pixi_confs/dynamic_lidar_interpolation.pixi.toml /app/packages/dynamic_lidar_interpolation/pixi.toml
 RUN apt-get update -y && apt-get install xorg openbox -y
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
 # install dependencies to `/app/.pixi/envs/prod`
 # use `--locked` to ensure the lockfile is up to date with pixi.toml
-RUN pixi install -e prod
+RUN pixi install --all \
 # create the shell-hook bash script to activate the environment
-RUN pixi shell-hook -e prod -s bash > /shell-hook
+&& pixi shell-hook -e default -s bash > /shell-hook
 RUN echo "#!/bin/bash" > /app/entrypoint.sh
 RUN cat /shell-hook >> /app/entrypoint.sh
 # extend the shell-hook script to run the command passed to the container

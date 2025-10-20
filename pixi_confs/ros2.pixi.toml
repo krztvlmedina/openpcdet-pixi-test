@@ -48,7 +48,6 @@ mypy = "*"
 
 [environments]
 default = { features = ["dev"], solve-group = "prod" }
-prod = { features = [], solve-group = "prod" }
 
 [tasks]
 #these are basically shortcuts to be run in a pixi environment. In the future, I should be able to add my custom nodes with tasks, or something.
@@ -58,7 +57,7 @@ prod = { features = [], solve-group = "prod" }
 sim = 'ros2 run turtlesim turtlesim_node'
 build = 'colcon build --symlink-install'
 hello = 'ros2 run my_package my_node'
-rviz = 'ros2 run rviz2 rviz2'
+rviz = 'ros2 run rviz2 rviz2 -f velodyne'
 
 [tasks.play_velodyne_bag]
 cmd = "ros2 bag play {{ bag_path }} {{ loop }}"
@@ -71,6 +70,7 @@ args = [{arg = "script_path", default = "src/yolo-lidar.py"}]
 # depends-on = [{task = "play_velodyne_bag"}]
 
 [tasks.interpolation_node]
+cmd="ros2 launch dynamic_lidar_interpolation pointcloud_interpolation_launch.py log_level:=info"
 
 # # build-wrapper = "rosdep install -i --from-path src --rosdistro humble -y"
 # build-ros2numpy = "ros2 pkg create --build-type ament_python --destination-directory src/ros2_numpy --node-name ros2_numpy ros2_numpy"
