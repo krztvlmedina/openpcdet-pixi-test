@@ -111,7 +111,7 @@ class PCDetNode(Node):
         self.marker_pub = self.create_publisher(
             MarkerArray,
             'detected_objects',
-            10
+            QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=15)
         )
         
         # Open3D visualization (optional)

@@ -56,28 +56,6 @@ rm -rf /opencv
 WORKDIR /
 ENV OpenCV_DIR=/usr/share/OpenCV
 
-
-# RUN add-apt-repository ppa:deadsnakes/ppa
-# RUN apt-get update
-# RUN apt-get install -y --no-install-recommends \
-#        python3.9 python3.9-dev python3.9-distutils python3.9-venv build-essential \
-#     && rm -rf /var/lib/apt/lists/*
-
-#     # Install pip for python3.9 using get-pip.py and upgrade pip/setuptools/wheel
-# RUN curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py \
-#     && python3.9 /tmp/get-pip.py \
-#     && python3.9 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
-#     && rm -f /tmp/get-pip.py
-
-# # Make /usr/bin/python3 point to python3.9 (so scripts calling `python3` use 3.9)
-# RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1
-
-# # Ensure `python3 -m pip` uses the python3.9 pip (install pip for 'python3' name)
-# RUN python3 -m pip install --no-cache-dir --upgrade pip
-
-# # Optional: make pip3 point to the python3 pip executable (safe; most images expect pip3)
-# RUN ln -sf /usr/bin/python3 /usr/bin/python && ln -sf /usr/bin/python3 /usr/bin/python3.0 
-
 # PyTorch for CUDA 11.6
 RUN pip3 install typing-extensions==4.12.2 torch==1.13.0+cu116 torchvision==0.14.0+cu116 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu116
 ENV TORCH_CUDA_ARCH_LIST="3.5;5.0;6.0;6.1;7.0;7.5;8.0;8.6+PTX"
@@ -102,7 +80,7 @@ ENV NVIDIA_VISIBLE_DEVICES="all" \
     LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/lib:/usr/lib:/usr/local/lib \
     QT_GRAPHICSSYSTEM="native"
 
-RUN apt-get update -y && apt-get install curl -y && apt-get install linux-headers-generic -y && apt-get install git -y
+RUN apt-get update -y && apt update -y && apt-get install curl -y && apt-get install linux-headers-generic -y && apt-get install git -y
 # RUN bash -c "set -euo pipefail; curl -fsSL https://pixi.sh/install.sh -o install.sh; bash install.sh"
 # # set -euo pipefail evita que dockerfile falle silenciosamente
 # ENV PATH="/root/.pixi/bin:${PATH}"
@@ -116,35 +94,135 @@ COPY ./packages/dynamic_lidar_interpolation /OpenPCDet/packages/dynamic_lidar_in
 COPY pixi_confs/dynamic_lidar_interpolation.pixi.toml /OpenPCDet/packages/dynamic_lidar_interpolation/pixi.toml
 
 
-# ROS2 GALACTIC INSTALLATION
-RUN apt install software-properties-common & add-apt-repository universe && apt update -y
-RUN apt install curl -y
+### ROS2 HUMBLE INSTALLATION
+# Install ROS2 Humble from source on Ubuntu 20.04
+RUN apt-get update && apt-get install -y \
+    locales \
+    software-properties-common \
+    && locale-gen en_US en_US.UTF-8 \
+    && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
+    && add-apt-repository universe \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=en_US.UTF-8
+
+# Add ROS2 apt repository
+RUN apt-get update && apt-get install -y \
+    curl \
+    gnupg \
+    lsb-release \
+    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install development tools and ROS tools
+RUN apt-get update && apt-get install -y \
+    python3-flake8-docstrings \
+    python3-pip \
+    python3-pytest-cov \
+    ros-dev-tools 
+
+RUN python3 -m pip install -U \
+    flake8-blind-except \
+    flake8-builtins \
+    flake8-class-newline \
+    flake8-comprehensions \
+    flake8-deprecated \
+    flake8-import-order \
+    flake8-quotes \
+    "pytest>=5.3" \    
+    pytest-repeat \
+    pytest-rerunfailures \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create workspace for ROS2 Humble
+WORKDIR /opt/ros2_humble
+RUN mkdir -p src
+
+# Get ROS2 Humble source code
+RUN vcs import --input https://raw.githubusercontent.com/ros2/ros2/humble/ros2.repos src
+
+# Clone perception_pcl for PCL support
+WORKDIR /opt/ros2_humble/src
+RUN git clone https://github.com/ros-perception/pcl_msgs.git -b ros2 && \
+    git clone https://github.com/ros-perception/perception_pcl.git -b humble
+
+ENV ROS_DISTRO=humble
+
+# Upgrade CMake to 3.27 (compatible with ROS2 Humble)
+RUN apt-get update && apt-get install -y wget && \
+    wget https://github.com/Kitware/CMake/releases/download/v3.27.9/cmake-3.27.9-linux-x86_64.sh && \
+    chmod +x cmake-3.27.9-linux-x86_64.sh && \
+    ./cmake-3.27.9-linux-x86_64.sh --prefix=/usr/local --skip-license && \
+    rm cmake-3.27.9-linux-x86_64.sh && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install dependencies using rosdep
+WORKDIR /opt/ros2_humble
+RUN apt-get update && \
+    rosdep init || true && \
+    rosdep update && \
+    rosdep install --from-paths src --ignore-src -y --skip-keys "fastcdr rti-connext-dds-6.0.1 urdfdom_headers" && \
+    rm -rf /var/lib/apt/lists/*
+
+# Build ROS2 Humble with PCL and visualization support
+# Building packages needed for PCL and MarkerArray
+RUN colcon build --symlink-install \
+    --cmake-args -DCMAKE_BUILD_TYPE=Release \
+    --packages-up-to \
+    rclcpp \
+    rclpy \
+    std_msgs \
+    sensor_msgs \
+    geometry_msgs \
+    visualization_msgs \
+    pcl_conversions \
+    pcl_ros \
+    tf2 \
+    tf2_ros \
+    tf2_geometry_msgs 
+
+RUN colcon build --symlink-install \
+    --cmake-args -DCMAKE_BUILD_TYPE=Release \
+    --packages-up-to \
+     sensor_msgs_py
+
+# Setup environment
+RUN echo ". /opt/ros2_humble/install/setup.sh" >> ~/.bashrc
+ENV AMENT_PREFIX_PATH=/opt/ros2_humble/install
+ENV COLCON_PREFIX_PATH=/opt/ros2_humble/install
+ENV LD_LIBRARY_PATH=/opt/ros2_humble/install/lib:$LD_LIBRARY_PATH
+ENV PATH=/opt/ros2_humble/install/bin:$PATH
+ENV PYTHONPATH=/opt/ros2_humble/install/lib/python3.8/site-packages:$PYTHONPATH
+ENV ROS_PYTHON_VERSION=3
+ENV ROS_VERSION=2
+
+WORKDIR /
 
 
-# RUN set -eux; \
-#     ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F "tag_name" | awk -F\" '{print $4}'); \
-#     echo "ROS_APT_SOURCE_VERSION=$ROS_APT_SOURCE_VERSION" >> /etc/environment
-# RUN echo "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.$(. /etc/os-release && echo ${UBUNTU_CODENAME:-${VERSION_CODENAME}})_all.deb"
-# RUN curl -v -L -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.$(. /etc/os-release && echo ${UBUNTU_CODENAME:-${VERSION_CODENAME}})_all.deb" \
-#     && dpkg -i /tmp/ros2-apt-source.deb
 
-# set -euo pipefail evita que dockerfile falle silenciosamente
-RUN bash -c "set -euo pipefail; \
-    curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg;"
+### ROS2 GALACTIC INSTALLATION
+# RUN apt install software-properties-common & add-apt-repository universe && apt update -y
+# RUN apt install curl -y
+
+# # set -euo pipefail evita que dockerfile falle silenciosamente
+# RUN bash -c "set -euo pipefail; \
+#     curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg;"
     
-RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
-RUN apt update -y && apt upgrade -y && apt install -y ros-galactic-ros-base && apt install ros-dev-tools -y
-RUN echo ". /opt/ros/galactic/setup.sh" >> ~/.bashrc
+# RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
 
-
-RUN apt update -y && apt upgrade -y && apt install -y ros-galactic-ros-base && apt install ros-dev-tools -y
-RUN echo ". /opt/ros/galactic/setup.sh" >> ~/.bashrc
+# RUN apt update -y && apt upgrade -y && apt install -y ros-galactic-ros-base && apt install ros-dev-tools -y
+# RUN echo ". /opt/ros/galactic/setup.sh" >> ~/.bashrc
 
 
 
 WORKDIR OpenPCDet
-RUN apt install ros-galactic-pcl-ros -y && apt install libeigen3-dev -y \
-    && apt install ros-galactic-common-interfaces && apt-get install ros-galactic-sensor-msgs-py
+
+### GALACTIC
+# RUN apt install ros-galactic-pcl-ros -y && apt install libeigen3-dev -y \
+#     && apt install ros-galactic-common-interfaces && apt-get install ros-galactic-sensor-msgs-py \
+#     && apt-get install -y ros-galactic-rmw-fastrtps-cpp
+
 
 # RUN . /opt/ros/humble/setup.sh && colcon build --packages-select dynamic_lidar_interpolation --cmake-clean-cache && . /opt/ros/humble/setup.sh
 # INSTALL ROS PACKAGES

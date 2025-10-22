@@ -34,6 +34,7 @@ RUN echo 'exec "$@"' >> /app/entrypoint.sh && chmod 0755 /app/entrypoint.sh
 # 	ros-humble-navigation2 \
 # 	ros-humble-rviz2
 
+
 ENTRYPOINT [ "/app/entrypoint.sh" ]
 CMD ["pixi", "shell"]
 

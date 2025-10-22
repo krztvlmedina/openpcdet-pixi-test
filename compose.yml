@@ -67,7 +67,9 @@ services:
     command: bash -c "tail -f /dev/null"
     stdin_open: true # docker run -i
     runtime: nvidia
+    ipc: host
     network_mode: host
+    pid: host
     deploy:
       resources:
         reservations:
@@ -100,14 +102,19 @@ services:
         # Rebuild the image if dependencies change by checking uv.lock
         - action: rebuild
           path: ./pyproject.toml
+    environment:
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+      # - ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+
   velodyne_ros:
     build:
       dockerfile: ros2.pixi.Dockerfile
     image: velodyne_ros2:latest
     container_name: velodyne_ros2
-    network_mode: "host"
     ipc: host
-    command: bash -c "tail -f /dev/null" && pixi run rviz
+    network_mode: host
+    pid: host
+    command: bash -c "tail -f /dev/null && pixi run rviz"
     # Needed to display graphical applications
     privileged: true
     environment:
@@ -115,12 +122,14 @@ services:
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
       - NVIDIA_DRIVER_CAPABILITIES=all
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+      # - ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     volumes:
       # - ${PWD}/src/ros2_numpy:/app/ros2_numpy:cached
       # - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
       - ./data/ros2_bags:/app/data/ros2_bags:cached
       - ./data/interpolated_bags:/app/data/interpolated_bags:cached
-      - ./pixi_confs/ros2.pixi.toml:/app/pixi.toml
+      - ./pixi_confs/ros2.pixi.toml:/app/pixi.toml:cached
       # Allows graphical programs in the container.
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
