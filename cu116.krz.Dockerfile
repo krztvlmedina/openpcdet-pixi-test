@@ -221,6 +221,10 @@ WORKDIR OpenPCDet
 #Arregla problema por version de python y av2
 RUN sed -i '14c\NDArrayNumber = "np.ndarray[Any, np.dtype[Union[np.integer[Any], np.floating[Any]]]]"' \
     /usr/local/lib/python3.8/dist-packages/av2/utils/typing.py
+
+COPY src/fixes/data_processor.py /OpenPCDet/pcdet/datasets/processor/data_processor.py
+
+                
 ### GALACTIC
 # RUN apt install ros-galactic-pcl-ros -y && apt install libeigen3-dev -y \
 #     && apt install ros-galactic-common-interfaces && apt-get install ros-galactic-sensor-msgs-py \

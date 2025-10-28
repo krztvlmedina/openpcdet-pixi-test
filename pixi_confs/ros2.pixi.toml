@@ -71,6 +71,10 @@ args = [{arg = "script_path", default = "src/yolo-lidar.py"}]
 
 [tasks.interpolation_node]
 cmd="ros2 launch dynamic_lidar_interpolation pointcloud_interpolation_launch.py log_level:=info"
+cwd = "packages/dynamic_lidar_interpolation/launch"
+
+### Config file is in /app/.pixi/envs/default/share/dynamic_lidar_interpolation/config/interpolation_config.yaml
+
 
 # # build-wrapper = "rosdep install -i --from-path src --rosdistro humble -y"
 # build-ros2numpy = "ros2 pkg create --build-type ament_python --destination-directory src/ros2_numpy --node-name ros2_numpy ros2_numpy"

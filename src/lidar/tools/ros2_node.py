@@ -7,16 +7,17 @@ import struct
 import math
 import numpy as np
 import torch
+import time
 
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
 from rclpy.qos import ReliabilityPolicy
 
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs_py import point_cloud2
 from visualization_msgs.msg import Marker, MarkerArray
-from std_msgs.msg import ColorRGBA
+from std_msgs.msg import ColorRGBA, Header
 
 try:
     import open3d
@@ -97,6 +98,7 @@ class PCDetNode(Node):
         
         self.class_names = cfg.CLASS_NAMES
         self.frame_count = 0
+        self.processing_frame = False
         
         self.get_logger().info("Model loaded.")
         self.get_logger().info(f"Subscribing to point cloud topic: {args.pointcloud_topic}")
@@ -105,6 +107,13 @@ class PCDetNode(Node):
             PointCloud2,
             args.pointcloud_topic,
             self.pointcloud_callback,
+            QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=15)
+        )
+
+        # Publisher for corrected point cloud
+        self.corrected_pc_pub = self.create_publisher(
+            PointCloud2,
+            'corrected_pointcloud',
             QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=15)
         )
         
@@ -132,14 +141,22 @@ class PCDetNode(Node):
     def pointcloud_callback(self, cloud_msg):
         """Callback function for point cloud messages"""
         self.get_logger().info(f'Processing frame {self.frame_count}')
+        start_time = time.time()
+        if self.processing_frame:
+            self.get_logger().warn('Still processing previous frame, skipping this one')
+            self.frame_count += 1
+            self.get_logger().info(f'Frame {self.frame_count} processed in {time.time() - start_time:.2f} seconds')
+            return
+        
+        self.processing_frame = True
+        current_frame = self.frame_count
         data_len = len(cloud_msg.data)
         expected_len = cloud_msg.row_step * cloud_msg.height
 
-        self.get_logger().info(
-            f"PointCloud2 dims: width={cloud_msg.width}, height={cloud_msg.height}, "
-            f"point_step={cloud_msg.point_step}, row_step={cloud_msg.row_step}, "
-            f"data_len={data_len}, expected_len={expected_len}"
-        )
+        # self.get_logger().info(
+        #     f"PointCloud2 dims: width={cloud_msg.width}, height={cloud_msg.height}, "
+        #     f"point_step={cloud_msg.point_step}, row_step={cloud_msg.row_step}, "
+        #     f"data_len={data_len}, expected_len={expected_len}"
         # Convert ROS2 PointCloud2 to numpy array
         points = self.pointcloud2_to_array(cloud_msg)
         
@@ -147,6 +164,9 @@ class PCDetNode(Node):
             self.get_logger().warn('Empty point cloud received')
             return
         
+        # Publish corrected point cloud
+        self.publish_corrected_pointcloud(points, cloud_msg.header)
+
         # Set points in dataset
         self.demo_dataset.set_points(points, self.frame_count)
         
@@ -181,8 +201,11 @@ class PCDetNode(Node):
                 
         except Exception as e:
             self.get_logger().error(f'Error during inference: {str(e)}')
-        
+            self.processing_frame = False
+        current_frame += 1
+        self.get_logger().info(f'Frame {self.frame_count} processed in {time.time() - start_time:.2f} seconds')
         self.frame_count += 1
+        self.processing_frame = False
 
     def pointcloud2_to_array(self, cloud_msg):
         """Convert PointCloud2 message to numpy array (defensive against truncated data)."""
@@ -194,10 +217,10 @@ class PCDetNode(Node):
 
         # If something is wrong with message metadata vs payload, try a best-effort trim
         if data_len != expected_len and point_step > 0 and data_len > 0:
-            self.get_logger().warn(
-                f"PointCloud2 data length mismatch: data_len={data_len} != row_step*height={expected_len}. "
-                "Attempting best-effort parsing by trimming the buffer to full points."
-            )
+            # self.get_logger().warn(
+            #     f"PointCloud2 data length mismatch: data_len={data_len} != row_step*height={expected_len}. "
+            #     "Attempting best-effort parsing by trimming the buffer to full points."
+            # )
             n_full_points = data_len // point_step
             trimmed_bytes = cloud_msg.data[: n_full_points * point_step]
 
@@ -289,6 +312,28 @@ class PCDetNode(Node):
         points = np.array(points_list, dtype=np.float32)
         return points
 
+    def publish_corrected_pointcloud(self, points, header):
+        """Publish corrected point cloud as PointCloud2 message"""
+        # Create PointCloud2 message
+        fields = [
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name='intensity', offset=12, datatype=PointField.FLOAT32, count=1),
+        ]
+        
+        # Create new header with same frame_id and timestamp
+        corrected_header = Header()
+        corrected_header.stamp = header.stamp
+        corrected_header.frame_id = header.frame_id
+        
+        # Convert numpy array to PointCloud2
+        corrected_msg = point_cloud2.create_cloud(corrected_header, fields, points)
+        
+        # Publish
+        self.corrected_pc_pub.publish(corrected_msg)
+        self.get_logger().info(f'Published corrected point cloud with {len(points)} points')
+
     def publish_markers(self, boxes, scores, labels, header):
         """Publish detected bounding boxes as ROS2 markers"""
         marker_array = MarkerArray()
@@ -327,7 +372,7 @@ class PCDetNode(Node):
             
             # Color based on class
             marker.color = self.get_color_for_class(int(label))
-            self.get_logger().info(f'Color for label {label}: {marker.color}')
+            # self.get_logger().info(f'Color for label {label}: {marker.color}')
             marker.color.a = min(float(score), 1.0)
             
             marker.lifetime.sec = 0
