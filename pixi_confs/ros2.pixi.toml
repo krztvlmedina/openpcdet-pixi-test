@@ -57,7 +57,10 @@ default = { features = ["dev"], solve-group = "prod" }
 sim = 'ros2 run turtlesim turtlesim_node'
 build = 'colcon build --symlink-install'
 hello = 'ros2 run my_package my_node'
-rviz = 'ros2 run rviz2 rviz2 -f velodyne'
+
+[tasks.rviz]
+cmd = 'ros2 run rviz2 rviz2 -f velodyne -d {{ config_file }}'
+args = [{arg = "config_file", default = "data/rviz/base.rviz"}]
 
 [tasks.play_velodyne_bag]
 cmd = "ros2 bag play {{ bag_path }} {{ loop }}"
@@ -70,7 +73,8 @@ args = [{arg = "script_path", default = "src/yolo-lidar.py"}]
 # depends-on = [{task = "play_velodyne_bag"}]
 
 [tasks.interpolation_node]
-cmd="ros2 launch dynamic_lidar_interpolation pointcloud_interpolation_launch.py log_level:=info"
+cmd="ros2 launch dynamic_lidar_interpolation pointcloud_interpolation_launch.py log_level:={{ log_level }}"
+args = [{arg = "log_level", default = "info"}]
 cwd = "packages/dynamic_lidar_interpolation/launch"
 
 ### Config file is in /app/.pixi/envs/default/share/dynamic_lidar_interpolation/config/interpolation_config.yaml
@@ -84,3 +88,44 @@ cwd = "packages/dynamic_lidar_interpolation/launch"
 
 [activation]
 # Source: https://pixi.sh/latest/tutorials/ros2/#add-activation-scripts
+
+
+#### ARCHIVO DE CONFIGURACION PSEUDO BUENO ####
+
+# pointcloud_interpolation_node:
+#   ros__parameters:
+#     lidar:
+#       max_range: 20.0 # Maximum range filtering (meters)
+#       min_range: 0.0    # Minimum range filtering (meters)
+      
+#     range_image:
+#       angular_resolution_x: 0.25  # Angular resolution in the X direction (degrees)
+#       angular_resolution_y: 2.05  # Angular resolution in the Y direction (degrees)
+#       max_angle_width: 360.0     # Maximum angular width of the range image (degrees)
+#       max_angle_height: 180.0    # Maximum angular height of the range image (degrees)
+#       min_angle_fov: -15      # Minimum angle for the field of view (degrees) [default is -90]
+#       max_angle_fov: 15      # Maximum angle for the field of view (degrees) [default is +90]
+    
+#     interpolation:
+#       method: "spline"                   # Interpolation method (linear, nearest, bilateral, edgeAware, or spline)
+#                                             # - "linear" uses bilinear interpolation to smoothly scale values.
+#                                             # - "nearest" uses nearest neighbor interpolation for simpler, faster calculations.
+#                                             # - "bilateral" uses bilateral interpolation for noise reduction while preserving edges.
+#                                             # - "edgeAware" enhances edge preservation while interpolating, focusing on boundaries.
+#                                             # - "spline" uses cubic spline interpolation for smooth transitions between points.
+
+#       scale_factor_x: 1.0        # Scale factor for the point cloud enlargement
+#       scale_factor_y: 1.0        # Scale factor for the point cloud enlargement
+#       interpolation_max_var: 50.0             # Maximum allowed variance for filtering in the interpolation process
+#       apply_variance_filter: false # Maximum allowed variance for filtering in the interpolation process
+#       rotation_angle_x: 0.0      # Rotation angle around the X axis (degrees)
+#       extrapolation_value: "NaN"    # Value to use when extrapolating outside the range (NaN by default)
+#       sensor_translation: [0.0, 0.0, 0.0]  # Translation of the sensor (in 3D space)
+      
+    
+#     topics:
+#       lidar_topic: "velodyne_points"          # Input topic for lidar data
+#       interpolated_point_cloud_topic: "interpolated_point_cloud"  # Output topic for the interpolated point cloud data
+    
+#     processing:
+#       filter_pc: true # Filter the interpolated point cloud with Statistical Outlier Removal

@@ -126,7 +126,7 @@ services:
       - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
       # - ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     volumes:
-      # - ${PWD}/src/ros2_numpy:/app/ros2_numpy:cached
+      - $./packages/dynamic_lidar_interpolation:/app/packages/dynamic_lidar_interpolation:cached
       # - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
       - ./data/ros2_bags:/app/data/ros2_bags:cached
       - ./data/interpolated_bags:/app/data/interpolated_bags:cached

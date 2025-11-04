@@ -79,6 +79,7 @@ class PCDetNode(Node):
             root_path=Path('.'),
             logger=self.logger_pcdet
         )
+        self.processing_frame = False
         
         self.get_logger().info(f"Dataset initialized with classes: {cfg.CLASS_NAMES}")
         self.get_logger().info("Building model...")
@@ -98,7 +99,6 @@ class PCDetNode(Node):
         
         self.class_names = cfg.CLASS_NAMES
         self.frame_count = 0
-        self.processing_frame = False
         
         self.get_logger().info("Model loaded.")
         self.get_logger().info(f"Subscribing to point cloud topic: {args.pointcloud_topic}")
@@ -140,7 +140,7 @@ class PCDetNode(Node):
 
     def pointcloud_callback(self, cloud_msg):
         """Callback function for point cloud messages"""
-        self.get_logger().info(f'Processing frame {self.frame_count}')
+        self.get_logger().info(f'Processing frame {self.frame_count} received in timestamp {time.time():.3f}')
         start_time = time.time()
         if self.processing_frame:
             self.get_logger().warn('Still processing previous frame, skipping this one')
@@ -150,27 +150,34 @@ class PCDetNode(Node):
         
         self.processing_frame = True
         current_frame = self.frame_count
-        data_len = len(cloud_msg.data)
-        expected_len = cloud_msg.row_step * cloud_msg.height
+        # data_len = len(cloud_msg.data)
+        # expected_len = cloud_msg.row_step * cloud_msg.height
 
         # self.get_logger().info(
         #     f"PointCloud2 dims: width={cloud_msg.width}, height={cloud_msg.height}, "
         #     f"point_step={cloud_msg.point_step}, row_step={cloud_msg.row_step}, "
         #     f"data_len={data_len}, expected_len={expected_len}"
         # Convert ROS2 PointCloud2 to numpy array
+
+        stepTime = time.time()
         points = self.pointcloud2_to_array(cloud_msg)
+
+        self.get_logger().info(f'PCL conversion processed in {time.time() - stepTime:.2f} seconds')
         
         if points is None or len(points) == 0:
             self.get_logger().warn('Empty point cloud received')
             return
         
         # Publish corrected point cloud
+        stepTime = time.time()
         self.publish_corrected_pointcloud(points, cloud_msg.header)
+        self.get_logger().info(f'Corrected PCL published in {time.time() - stepTime:.2f} seconds')
 
         # Set points in dataset
         self.demo_dataset.set_points(points, self.frame_count)
         
         # Run inference
+        stepTime = time.time()
         try:
             with torch.no_grad():
                 data_dict = self.demo_dataset[0]
@@ -202,6 +209,8 @@ class PCDetNode(Node):
         except Exception as e:
             self.get_logger().error(f'Error during inference: {str(e)}')
             self.processing_frame = False
+
+        self.get_logger().info(f'Inference ran in {time.time() - stepTime:.2f} seconds')
         current_frame += 1
         self.get_logger().info(f'Frame {self.frame_count} processed in {time.time() - start_time:.2f} seconds')
         self.frame_count += 1
@@ -458,7 +467,6 @@ def main(args=None):
     
     # Create node
     node = PCDetNode(parsed_args, parsed_cfg)
-    
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
