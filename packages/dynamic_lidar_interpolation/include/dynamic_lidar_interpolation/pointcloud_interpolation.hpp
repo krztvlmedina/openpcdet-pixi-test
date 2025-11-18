@@ -234,7 +234,6 @@ namespace pointcloud_interpolation
                     densePointCloud->points.emplace_back(point);
                 }
             }
-            
             densePointCloud->width = interpolatedRange.cols();
             densePointCloud->height = interpolatedRange.rows();
             densePointCloud->is_dense = false;
