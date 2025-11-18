@@ -79,8 +79,8 @@ services:
     volumes:
       - ./src/lidar:/OpenPCDet/src/lidar:cached
       # - ${PWD}/.pixi/pifenet.pixi.toml:/workspaces/pifenet/pixi.toml
-      - ./data/kitti/training:/OpenPCDet/data/kitti/training
-      - ./data/kitti/testing:/OpenPCDet/data/kitti/testing
+      - ../datos/kitti/training:/OpenPCDet/data/kitti/training
+      - ../datos/kitti/testing:/OpenPCDet/data/kitti/testing
       - ./data/npy_data:/OpenPCDet/data/npy_data/:cached
       - ../datos/ros1_rosbags/:/OpenPCDet/data/ros1_rosbags/:cached
       - ../datos/pretrained-models/:/OpenPCDet/data/pretrained-models:cached
@@ -126,7 +126,7 @@ services:
       - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
       # - ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     volumes:
-      - $./packages/dynamic_lidar_interpolation:/app/packages/dynamic_lidar_interpolation:cached
+      - ./packages/dynamic_lidar_interpolation:/app/packages/dynamic_lidar_interpolation:cached
       # - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
       - ./data/ros2_bags:/app/data/ros2_bags:cached
       - ./data/interpolated_bags:/app/data/interpolated_bags:cached
