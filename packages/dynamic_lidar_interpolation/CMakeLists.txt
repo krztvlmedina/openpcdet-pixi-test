@@ -24,11 +24,11 @@ add_definitions(${PCL_DEFINITIONS})
 
 
 # Add executable
-add_executable(pointcloud_interpolation_node 
-  src/pointcloud_interpolation_node.cpp 
+add_executable(pointcloud_interpolation_node
+  src/pointcloud_interpolation_node.cpp
 )
 
-ament_target_dependencies(pointcloud_interpolation_node
+ ament_target_dependencies(pointcloud_interpolation_node
   rclcpp
   sensor_msgs
   PCL
@@ -53,6 +53,20 @@ install(DIRECTORY
   rviz
   foxglove
   DESTINATION share/${PROJECT_NAME}/
+)
+
+# Install Python scripts for .bin file processing
+install(PROGRAMS
+  scripts/bin_file_utils.py
+  scripts/interpolate_bin_file.py
+  scripts/interpolate_bin_simple.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install scripts README
+install(FILES
+  scripts/README.md
+  DESTINATION share/${PROJECT_NAME}/scripts
 )
 
 ament_package()
