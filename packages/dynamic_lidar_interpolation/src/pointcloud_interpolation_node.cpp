@@ -25,6 +25,9 @@
 
 #include "dynamic_lidar_interpolation/pointcloud_interpolation.hpp"
 
+#include <chrono>
+#include <format>
+#include <string>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <pcl_conversions/pcl_conversions.h>
@@ -35,6 +38,7 @@
 
 using namespace std::chrono_literals;
 using rcl_interfaces::msg::SetParametersResult;
+using namespace std::chrono;
 
 /**
  * @brief ROS2 Node for LiDAR Point Cloud Interpolation with Dynamic Parameter Updates.
@@ -56,7 +60,7 @@ public:
 
         // Cache parameters to avoid retrieving them on every callback
         cache_parameters();
-
+        node_start = std::chrono::high_resolution_clock::now();
         // Initialize publishers and subscribers
         initialize_publishers();
         initialize_subscribers();
@@ -233,8 +237,19 @@ private:
     void fusionCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr lidar_msg)
     {
         std::lock_guard<std::mutex> lock(mutex_);
+        
+        auto now = std::chrono::system_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+        auto t = std::chrono::system_clock::to_time_t(now);
+        std::tm bt{};
+        localtime_r(&t, &bt);
+        RCLCPP_DEBUG(this->get_logger(), "Fusion callback triggered at %04d-%02d-%02d %02d:%02d:%02d.%03lld",
+            bt.tm_year + 1900, bt.tm_mon + 1, bt.tm_mday,
+            bt.tm_hour, bt.tm_min, bt.tm_sec,
+            static_cast<long long>(ms.count()));
 
-        RCLCPP_DEBUG(this->get_logger(), "Fusion callback triggered.");
+
+        auto start = std::chrono::high_resolution_clock::now();
 
         try
         {
@@ -282,6 +297,8 @@ private:
             //        Step 2: PointCloud Interpolation    /
             /*───────────────────────────────────────────*/
 
+            auto step = std::chrono::high_resolution_clock::now();
+            
             // Generate 3D interpolated PointCloud
             auto interpolated_dense_cloud = range_utils_->interpolatePointCloud(
                 sor_filtered_cloud_,    // The filtered point cloud to be interpolated
@@ -302,6 +319,10 @@ private:
                 min_ang_fov_,           // Minimum angle for the field of view (degree)
                 max_ang_fov_            // Maximum angle for the field of view (degree)
             );
+            
+            auto finish   = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> fp_ms = finish-step;
+            RCLCPP_DEBUG(this->get_logger(), "Interpolation done in %f milliseconds.", fp_ms);
 
             if (!interpolated_dense_cloud || interpolated_dense_cloud->points.empty())
             {
@@ -312,12 +333,15 @@ private:
             RCLCPP_DEBUG(this->get_logger(), "Interpolated dense point cloud has %zu points.", interpolated_dense_cloud->points.size());
 
             // Step 3: Publish interpolated point cloud
+            start = std::chrono::high_resolution_clock::now();
             sensor_msgs::msg::PointCloud2 fused_pcl_msg;
             pcl::toROSMsg(*interpolated_dense_cloud, fused_pcl_msg);
             fused_pcl_msg.header = lidar_msg->header;
             interpolated_point_cloud_pub_->publish(fused_pcl_msg);
-
-            RCLCPP_DEBUG(this->get_logger(), "Published interpolated point cloud.");
+            
+            finish = std::chrono::high_resolution_clock::now();
+            fp_ms = finish-step;
+            RCLCPP_DEBUG(this->get_logger(), "Published interpolated point cloud in %f milliseconds.", fp_ms);
         }
         catch (const std::exception &e)
         {
@@ -574,7 +598,7 @@ private:
                     // Reinitialize subscriber with the new topic
                     sub_lidar_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
                         lidar_topic_,
-                        rclcpp::QoS(rclcpp::KeepLast(10)).best_effort(),
+                        rclcpp::QoS(rclcpp::KeepLast(1)).reliable(),
                         std::bind(&LidarInterpolationNode::fusionCallback, this, std::placeholders::_1));
                     RCLCPP_INFO(this->get_logger(), "Updated 'topics.lidar_topic' to '%s'", lidar_topic_.c_str());
                 }
@@ -665,6 +689,8 @@ private:
     std::string lidar_topic_;
     std::string interpolated_point_cloud_topic_;
 
+    std::chrono::high_resolution_clock::time_point node_start;
+
     // Parameters and utilities
     std::shared_ptr<pointcloud_interpolation::PointCloudInterpolator> range_utils_;
 
@@ -692,7 +718,9 @@ int main(int argc, char **argv)
     try
     {
         auto node = std::make_shared<LidarInterpolationNode>();
-        rclcpp::spin(node);
+        rclcpp::executors::MultiThreadedExecutor exec;
+        exec.add_node(node);
+        exec.spin();
     }
     catch (const std::exception &e)
     {
