@@ -14,6 +14,10 @@ find_package(PCL REQUIRED COMPONENTS common io filters)
 find_package(pcl_conversions REQUIRED)
 find_package(Eigen3 REQUIRED)
 
+# Find Python and pybind11 for Python bindings
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+find_package(pybind11 CONFIG)
+
 include_directories(
   include
   ${PCL_INCLUDE_DIRS}
@@ -40,6 +44,32 @@ target_link_libraries(pointcloud_interpolation_node
   ${PCL_LIBRARIES}
 )
 
+# Build Python bindings if pybind11 is available
+if(pybind11_FOUND)
+  message(STATUS "pybind11 found - building Python bindings")
+
+  pybind11_add_module(interpolation_core
+    src/interpolation_bindings.cpp
+  )
+
+  target_include_directories(interpolation_core PRIVATE
+    include
+    ${PCL_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIRS}
+  )
+
+  target_link_libraries(interpolation_core PRIVATE
+    ${PCL_LIBRARIES}
+  )
+
+  # Install the Python module to the package's Python directory
+  install(TARGETS interpolation_core
+    DESTINATION lib/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages
+  )
+else()
+  message(WARNING "pybind11 not found - Python bindings will not be built. Install with: pip install pybind11")
+endif()
+
 # Install executables
 install(TARGETS
   pointcloud_interpolation_node
@@ -60,6 +90,7 @@ install(PROGRAMS
   scripts/bin_file_utils.py
   scripts/interpolate_bin_file.py
   scripts/interpolate_bin_simple.py
+  scripts/interpolate_with_config.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

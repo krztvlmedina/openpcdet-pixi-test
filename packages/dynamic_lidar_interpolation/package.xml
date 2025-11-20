@@ -23,6 +23,9 @@
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
 
+  <!-- Python bindings (optional) -->
+  <build_depend>pybind11_vendor</build_depend>
+
   <export>
     <build_type>ament_cmake</build_type>
   </export>
