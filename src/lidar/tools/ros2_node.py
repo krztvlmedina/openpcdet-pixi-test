@@ -107,14 +107,14 @@ class PCDetNode(Node):
             PointCloud2,
             args.pointcloud_topic,
             self.pointcloud_callback,
-            QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=15)
+            QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=2)
         )
 
         # Publisher for corrected point cloud
         self.corrected_pc_pub = self.create_publisher(
             PointCloud2,
             'corrected_pointcloud',
-            QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=15)
+            QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=5)
         )
         
         self.marker_pub = self.create_publisher(

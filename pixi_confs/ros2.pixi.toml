@@ -60,7 +60,7 @@ hello = 'ros2 run my_package my_node'
 
 [tasks.rviz]
 cmd = 'ros2 run rviz2 rviz2 -f velodyne -d {{ config_file }}'
-args = [{arg = "config_file", default = "data/rviz/base.rviz"}]
+args = [{arg = "config_file", default = "/app/data/config_files/rviz/interpolation.rviz"}]
 
 [tasks.play_velodyne_bag]
 cmd = "ros2 bag play {{ bag_path }} {{ loop }}"
@@ -73,8 +73,8 @@ args = [{arg = "script_path", default = "src/yolo-lidar.py"}]
 # depends-on = [{task = "play_velodyne_bag"}]
 
 [tasks.interpolation_node]
-cmd="ros2 launch dynamic_lidar_interpolation pointcloud_interpolation_launch.py log_level:={{ log_level }}"
-args = [{arg = "log_level", default = "info"}]
+cmd="ros2 launch dynamic_lidar_interpolation pointcloud_interpolation_launch.py log_level:={{ log_level }} config_file:={{ config_file }}"
+args = [{arg = "log_level", default = "info"},{arg = "config_file", default = "/packages/dynamic_lidar_interpolation/config/interpolation_config.yaml"}]
 cwd = "packages/dynamic_lidar_interpolation/launch"
 
 ### Config file is in /app/.pixi/envs/default/share/dynamic_lidar_interpolation/config/interpolation_config.yaml
