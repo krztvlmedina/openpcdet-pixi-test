@@ -58,6 +58,11 @@ if(pybind11_FOUND)
     ${EIGEN3_INCLUDE_DIRS}
   )
 
+  ament_target_dependencies(interpolation_core
+    rclcpp
+    sensor_msgs
+  )
+
   target_link_libraries(interpolation_core PRIVATE
     ${PCL_LIBRARIES}
   )
