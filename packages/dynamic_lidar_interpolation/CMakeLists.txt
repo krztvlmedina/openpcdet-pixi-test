@@ -56,15 +56,14 @@ if(pybind11_FOUND)
     include
     ${PCL_INCLUDE_DIRS}
     ${EIGEN3_INCLUDE_DIRS}
-  )
-
-  ament_target_dependencies(interpolation_core
-    rclcpp
-    sensor_msgs
+    ${rclcpp_INCLUDE_DIRS}
+    ${sensor_msgs_INCLUDE_DIRS}
   )
 
   target_link_libraries(interpolation_core PRIVATE
     ${PCL_LIBRARIES}
+    ${rclcpp_LIBRARIES}
+    ${sensor_msgs_LIBRARIES}
   )
 
   # Install the Python module to the package's Python directory
