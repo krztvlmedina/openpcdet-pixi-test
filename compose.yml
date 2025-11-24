@@ -126,11 +126,17 @@ services:
       - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
       # - ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     volumes:
-      - ./packages/dynamic_lidar_interpolation:/app/packages/dynamic_lidar_interpolation:cached
+      - ./packages/dynamic_lidar_interpolation:/app/packages/dynamic_lidar_interpolation:ro
       # - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
       - ./data/ros2_bags:/app/data/ros2_bags:cached
       - ./data/interpolated_bags:/app/data/interpolated_bags:cached
+      - ./data/config_files/rviz/:/app/data/config_files/rviz/:cached
+      - ./data/config_files/interpolation/:/app/data/config_files/interpolation/:cached
+      - ../datos/kitti/:/app/data/kitti:cached
+      - ../datos/interpolated-kitti/:/app/data/output/interpolated-kitti:cached
       - ./pixi_confs/ros2.pixi.toml:/app/pixi.toml:cached
+      - ./pixi_confs/dynamic_lidar_interpolation.pixi.toml:/app/packages/dynamic_lidar_interpolation/pixi.toml:cached
+      - ./pixi_confs/ros2_numpy.pixi.toml:/app/packages/ros2_numpy/pixi.toml:cached
       # Allows graphical programs in the container.
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw

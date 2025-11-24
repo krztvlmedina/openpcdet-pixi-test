@@ -9,8 +9,7 @@ No obstante, esto ya está considerado en el Dockerfile del contenedor.
 
 PointRCNN:
 
-python3 src/lidar/tools/ros2_node.py 
---cfg_file src/lidar/tools/cfgs/kitti_models/custom_pointrcnn_iou.yaml --ckpt data/pretrained-models/pointrcnn_iou_7875.pth --pointcloud_topic \interpolated_point_cloud
+python3 src/lidar/tools/ros2_node.py --cfg_file src/lidar/tools/cfgs/kitti_models/custom_pointrcnn_iou.yaml --ckpt data/pretrained-models/pointrcnn_iou_7875.pth --pointcloud_topic \interpolated_point_cloud
 
 PartA2:
 

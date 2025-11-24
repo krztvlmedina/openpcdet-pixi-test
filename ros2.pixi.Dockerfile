@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7-labs
 #
-FROM ghcr.io/prefix-dev/pixi:0.55.0 AS build
+FROM ghcr.io/prefix-dev/pixi:0.59.0 AS build
 COPY pixi_confs/ros2.pixi.toml /app/pixi.toml
 
 COPY packages/ros2_numpy /app/packages/ros2_numpy
