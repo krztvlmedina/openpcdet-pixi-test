@@ -33,14 +33,22 @@ def generate_launch_description():
         description='Set the ROS 2 logging level (e.g., debug, info, warn, error, fatal)'
     )
 
+    # Declare a launch argument for the config file path
+    config_file_arg = DeclareLaunchArgument(
+        'config_file',
+        default_value=os.path.join(
+            get_package_share_directory('dynamic_lidar_interpolation'),
+            'config',
+            'interpolation_config.yaml'
+        ),
+        description='Path to the interpolation configuration YAML file'
+    )
+
     # Use the user-provided log level or the default value
     log_level = LaunchConfiguration('log_level')
 
-    config = os.path.join(
-        get_package_share_directory('dynamic_lidar_interpolation'),
-        'config',
-        'interpolation_config.yaml'
-    )
+    # Use the user-provided config file or the default value
+    config = LaunchConfiguration('config_file')
 
     foxglove_launch_file = os.path.join(
         get_package_share_directory('foxglove_bridge'),
@@ -63,6 +71,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         log_level_arg,
+        config_file_arg,
         OpaqueFunction(function=cleanup_existing_process),
         LogInfo(msg="Launching foxglove_bridge on ws://localhost:8765"),
         foxglove_bridge_launch,
