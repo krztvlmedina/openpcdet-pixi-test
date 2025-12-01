@@ -133,6 +133,7 @@ services:
       - ./data/config_files/rviz/:/app/data/config_files/rviz/:cached
       - ./data/config_files/interpolation/:/app/data/config_files/interpolation/:cached
       - ../datos/kitti/:/app/data/kitti:cached
+      - ../datos/reduced-kitti/:/app/data/reduced-kitti:cached
       - ../datos/interpolated-kitti/:/app/data/output/interpolated-kitti:cached
       - ./pixi_confs/ros2.pixi.toml:/app/pixi.toml:cached
       - ./pixi_confs/dynamic_lidar_interpolation.pixi.toml:/app/packages/dynamic_lidar_interpolation/pixi.toml:cached

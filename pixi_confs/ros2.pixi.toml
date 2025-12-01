@@ -28,6 +28,7 @@ ros-humble-slam-toolbox = "*"
 ros-humble-nav2-bringup = "*"
 ros-humble-navigation2  = "*"	
 ros-humble-rviz2 = "*"
+tqdm = "*"
 
 ros-humble-ros2-numpy = { path = "./packages/ros2_numpy"}
 ros-humble-dynamic-lidar-interpolation = { path = "./packages/dynamic_lidar_interpolation"}
