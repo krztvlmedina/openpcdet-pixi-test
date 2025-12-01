@@ -127,6 +127,7 @@ services:
       # - ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     volumes:
       - ./packages/dynamic_lidar_interpolation:/app/packages/dynamic_lidar_interpolation:ro
+      - ./packages/pointcloud_utils:/app/packages/pointcloud_utils:ro
       # - ${PWD}/src/pcdet_ros2:/app/pcdet_ros2:cached
       - ./data/ros2_bags:/app/data/ros2_bags:cached
       - ./data/interpolated_bags:/app/data/interpolated_bags:cached
@@ -137,6 +138,7 @@ services:
       - ../datos/interpolated-kitti/:/app/data/output/interpolated-kitti:cached
       - ./pixi_confs/ros2.pixi.toml:/app/pixi.toml:cached
       - ./pixi_confs/dynamic_lidar_interpolation.pixi.toml:/app/packages/dynamic_lidar_interpolation/pixi.toml:cached
+      - ./pixi_confs/pointcloud_utils.pixi.toml:/app/packages/pointcloud_utils/pixi.toml:cached
       - ./pixi_confs/ros2_numpy.pixi.toml:/app/packages/ros2_numpy/pixi.toml:cached
       # Allows graphical programs in the container.
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
