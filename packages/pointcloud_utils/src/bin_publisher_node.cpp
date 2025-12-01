@@ -140,7 +140,7 @@ private:
     input.close();
 
     // Create PCL point cloud
-    auto cloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
+    auto cloud = pcl::make_shared<pcl::PointCloud<pcl::PointXYZI>>();
     cloud->points.reserve(num_points);
 
     for (size_t i = 0; i < num_points; ++i) {
