@@ -13,7 +13,8 @@ RUN apt-get update -y && apt-get install xorg openbox -y
 WORKDIR /app
 # install dependencies to `/app/.pixi/envs/prod`
 # use `--locked` to ensure the lockfile is up to date with pixi.toml
-RUN pixi install --all \
+# increase file descriptor limit to avoid "No file descriptors available" error
+RUN ulimit -n 65536 && pixi install --all \
 # create the shell-hook bash script to activate the environment
 && pixi shell-hook -e default -s bash > /shell-hook
 RUN echo "#!/bin/bash" > /app/entrypoint.sh
