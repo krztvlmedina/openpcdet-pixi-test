@@ -32,6 +32,7 @@ tqdm = "*"
 
 ros-humble-ros2-numpy = { path = "./packages/ros2_numpy"}
 ros-humble-dynamic-lidar-interpolation = { path = "./packages/dynamic_lidar_interpolation"}
+ros-humble-pointcloud-utils = { path = "./packages/pointcloud_utils"}
 
 # # For openpcdet ROS2 wrapper
 # ros-humble-ament-cmake-nose = "*"

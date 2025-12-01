@@ -8,6 +8,10 @@ COPY pixi_confs/ros2_numpy.pixi.toml /app/packages/ros2_numpy/pixi.toml
 
 COPY packages/dynamic_lidar_interpolation /app/packages/dynamic_lidar_interpolation
 COPY pixi_confs/dynamic_lidar_interpolation.pixi.toml /app/packages/dynamic_lidar_interpolation/pixi.toml
+
+COPY packages/pointcloud_utils /app/packages/pointcloud_utils
+COPY pixi_confs/pointcloud_utils.pixi.toml /app/packages/pointcloud_utils/pixi.toml
+
 RUN apt-get update -y && apt-get install xorg openbox -y
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app

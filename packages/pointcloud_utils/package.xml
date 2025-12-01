@@ -3,6 +3,7 @@
   <name>pointcloud_utils</name>
   <version>0.1.0</version>
   <description>Utilities for point cloud processing, KITTI dataset tools, and .bin file publishing</description>
+  <maintainer email="cristobalandresmedina@gmail.com">Cristobal Medina</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
