@@ -91,7 +91,6 @@ install(DIRECTORY
 
 # Install Python scripts for .bin file processing
 install(PROGRAMS
-  scripts/bin_file_utils.py
   scripts/interpolate_bin_file.py
   scripts/interpolate_bin_simple.py
   scripts/interpolate_with_config.py
