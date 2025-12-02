@@ -4,16 +4,16 @@ version = "0.1.0"
 description = "Base ROS2 pixi project."
 authors = ["Cristobal Medina <krztvl@gmail.com>"]
 channels = [
-    "robostack-humble", 
+    "robostack-humble",
     "https://prefix.dev/conda-forge",
-    "https://prefix.dev/pixi-build-backends"
-    ]
+    "https://prefix.dev/pixi-build-backends",
+]
 # Your project can support multiple platforms, the current platform will be automatically added.
 platforms = ["linux-64"]
 preview = ["pixi-build"]
 
 [dependencies]
-pixi-build-api-version = {version = "1.*", channel = "https://prefix.dev/pixi-build-backends"}
+pixi-build-api-version = { version = "1.*", channel = "https://prefix.dev/pixi-build-backends" }
 ros-humble-desktop-full = "*"
 ros-humble-turtlesim = "*"
 colcon-common-extensions = "*"
@@ -26,13 +26,13 @@ ros-humble-ros-ign-image = "*"
 ros-humble-ros-ign-interfaces = "*"
 ros-humble-slam-toolbox = "*"
 ros-humble-nav2-bringup = "*"
-ros-humble-navigation2  = "*"	
+ros-humble-navigation2 = "*"
 ros-humble-rviz2 = "*"
 tqdm = "*"
 
-ros-humble-ros2-numpy = { path = "./packages/ros2_numpy"}
-ros-humble-dynamic-lidar-interpolation = { path = "./packages/dynamic_lidar_interpolation"}
-ros-humble-pointcloud-utils = { path = "./packages/pointcloud_utils"}
+ros-humble-ros2-numpy = { path = "./packages/ros2_numpy" }
+ros-humble-dynamic-lidar-interpolation = { path = "./packages/dynamic_lidar_interpolation" }
+ros-humble-pointcloud-utils = { path = "./packages/pointcloud_utils" }
 
 # # For openpcdet ROS2 wrapper
 # ros-humble-ament-cmake-nose = "*"
@@ -62,22 +62,36 @@ hello = 'ros2 run my_package my_node'
 
 [tasks.rviz]
 cmd = 'ros2 run rviz2 rviz2 -f velodyne -d {{ config_file }}'
-args = [{arg = "config_file", default = "/app/data/config_files/rviz/interpolation.rviz"}]
+args = [
+    { arg = "config_file", default = "/app/data/config_files/rviz/interpolation.rviz" },
+]
 
 [tasks.play_velodyne_bag]
 cmd = "ros2 bag play {{ bag_path }} {{ loop }}"
 args = [
-    {arg = "bag_path", default = "data/ros2_bags/rosbag2_2025_10_03-20_38_38/rosbag2_2025_10_03-20_38_38_0.db3"},
-    {arg = "loop", default = "--loop"},]
+    { arg = "bag_path", default = "data/ros2_bags/rosbag2_2025_10_03-20_38_38/rosbag2_2025_10_03-20_38_38_0.db3" },
+    { arg = "loop", default = "--loop" },
+]
 [tasks.python_bag]
 cmd = "python {{ script_path }}"
-args = [{arg = "script_path", default = "src/yolo-lidar.py"}]
+args = [{ arg = "script_path", default = "src/yolo-lidar.py" }]
 # depends-on = [{task = "play_velodyne_bag"}]
 
 [tasks.interpolation_node]
-cmd="ros2 launch dynamic_lidar_interpolation pointcloud_interpolation_launch.py log_level:={{ log_level }} config_file:={{ config_file }}"
-args = [{arg = "log_level", default = "info"},{arg = "config_file", default = "/packages/dynamic_lidar_interpolation/config/interpolation_config.yaml"}]
+cmd = "ros2 launch dynamic_lidar_interpolation pointcloud_interpolation_launch.py log_level:={{ log_level }} config_file:={{ config_file }}"
+args = [
+    { arg = "log_level", default = "info" },
+    { arg = "config_file", default = "/packages/dynamic_lidar_interpolation/config/interpolation_config.yaml" },
+]
 cwd = "packages/dynamic_lidar_interpolation/launch"
+
+[tasks.bin_publisher]
+cmd = "ros2 launch pointcloud_utils bin_publisher_launch.py log_level:={{ log_level }} config_file:={{ config_file }}"
+args = [
+    { arg = "log_level", default = "info" },
+    { arg = "config_file", default = "/app/packages/poincloud_utils/config/bin_publisher.yaml" }
+]
+cwd = "packages/pointcloud_utils/launch"
 
 ### Config file is in /app/.pixi/envs/default/share/dynamic_lidar_interpolation/config/interpolation_config.yaml
 
@@ -99,7 +113,7 @@ cwd = "packages/dynamic_lidar_interpolation/launch"
 #     lidar:
 #       max_range: 20.0 # Maximum range filtering (meters)
 #       min_range: 0.0    # Minimum range filtering (meters)
-      
+
 #     range_image:
 #       angular_resolution_x: 0.25  # Angular resolution in the X direction (degrees)
 #       angular_resolution_y: 2.05  # Angular resolution in the Y direction (degrees)
@@ -107,7 +121,7 @@ cwd = "packages/dynamic_lidar_interpolation/launch"
 #       max_angle_height: 180.0    # Maximum angular height of the range image (degrees)
 #       min_angle_fov: -15      # Minimum angle for the field of view (degrees) [default is -90]
 #       max_angle_fov: 15      # Maximum angle for the field of view (degrees) [default is +90]
-    
+
 #     interpolation:
 #       method: "spline"                   # Interpolation method (linear, nearest, bilateral, edgeAware, or spline)
 #                                             # - "linear" uses bilinear interpolation to smoothly scale values.
@@ -123,11 +137,11 @@ cwd = "packages/dynamic_lidar_interpolation/launch"
 #       rotation_angle_x: 0.0      # Rotation angle around the X axis (degrees)
 #       extrapolation_value: "NaN"    # Value to use when extrapolating outside the range (NaN by default)
 #       sensor_translation: [0.0, 0.0, 0.0]  # Translation of the sensor (in 3D space)
-      
-    
+
+
 #     topics:
 #       lidar_topic: "velodyne_points"          # Input topic for lidar data
 #       interpolated_point_cloud_topic: "interpolated_point_cloud"  # Output topic for the interpolated point cloud data
-    
+
 #     processing:
 #       filter_pc: true # Filter the interpolated point cloud with Statistical Outlier Removal

@@ -81,11 +81,18 @@ services:
       # - ${PWD}/.pixi/pifenet.pixi.toml:/workspaces/pifenet/pixi.toml
       - ../datos/kitti/training:/OpenPCDet/data/kitti/training
       - ../datos/kitti/testing:/OpenPCDet/data/kitti/testing
-      - ../datos/reduced-kitti/:/OpenPCDet/data/reduced-kitti/
+      - ../datos/kitti/gt_database:/OpenPCDet/data/kitti/gt_database:cached
+      - ../datos/reduced-kitti:/OpenPCDet/data/reduced-kitti:cached
+      - ../datos/reduced-kitti/gt_database:/OpenPCDet/data/reduced-kitti/gt_database:cached
       - ./data/npy_data:/OpenPCDet/data/npy_data/:cached
       - ../datos/ros1_rosbags/:/OpenPCDet/data/ros1_rosbags/:cached
       - ../datos/pretrained-models/:/OpenPCDet/data/pretrained-models:cached
       - ../datos/confs/parta2-anchor.yaml:/OpenPCDet/data/confs/parta2-anchor.yaml:cached
+      # # # db pickle files
+      - ../datos/kitti/db_infos:/OpenPCDet/data/kitti/db_infos/:cached
+      - ../datos/reduced-kitti/db_infos:/OpenPCDet/data/reduced-kitti/db_infos/:cached
+      - ../datos/output:/OpenPCDet/output:cached
+
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
     develop:
