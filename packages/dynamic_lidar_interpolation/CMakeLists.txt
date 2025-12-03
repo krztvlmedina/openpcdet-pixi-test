@@ -27,12 +27,12 @@ include_directories(
 add_definitions(${PCL_DEFINITIONS})
 
 
-# Add executable
+# Add original executable
 add_executable(pointcloud_interpolation_node
   src/pointcloud_interpolation_node.cpp
 )
 
- ament_target_dependencies(pointcloud_interpolation_node
+ament_target_dependencies(pointcloud_interpolation_node
   rclcpp
   sensor_msgs
   PCL
@@ -41,6 +41,23 @@ add_executable(pointcloud_interpolation_node
 )
 
 target_link_libraries(pointcloud_interpolation_node
+  ${PCL_LIBRARIES}
+)
+
+# Add optimized executable with frame dropping and hardcoded depth=1
+add_executable(pointcloud_interpolation_node_optimized
+  src/pointcloud_interpolation_node_optimized.cpp
+)
+
+ament_target_dependencies(pointcloud_interpolation_node_optimized
+  rclcpp
+  sensor_msgs
+  PCL
+  pcl_conversions
+  Eigen3
+)
+
+target_link_libraries(pointcloud_interpolation_node_optimized
   ${PCL_LIBRARIES}
 )
 
@@ -77,6 +94,7 @@ endif()
 # Install executables
 install(TARGETS
   pointcloud_interpolation_node
+  pointcloud_interpolation_node_optimized
   DESTINATION lib/${PROJECT_NAME}
 )
 

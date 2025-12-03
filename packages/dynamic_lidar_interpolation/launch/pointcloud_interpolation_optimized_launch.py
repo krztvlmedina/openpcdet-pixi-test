@@ -61,23 +61,15 @@ def generate_launch_description():
     config = LaunchConfiguration('resolved_config_file')
 
     # OPTIMIZED CONFIGURATION:
-    # 1. Minimal queue depth (1) for lowest latency - eliminates message backlog
-    # 2. BEST_EFFORT QoS for real-time performance - prioritizes recent data over reliability
+    # 1. Uses optimized executable with hardcoded depth=1 (QoS overrides don't work reliably)
+    # 2. Frame dropping built-in to prevent stale message processing
+    # 3. Performance statistics logging every 100 frames
     pointcloud_interpolation_node = Node(
         package='dynamic_lidar_interpolation',
-        executable='pointcloud_interpolation_node',
+        executable='pointcloud_interpolation_node_optimized',  # OPTIMIZED: Use the optimized executable
         name='pointcloud_interpolation_node',
         output='screen',
-        parameters=[
-            config,
-            {
-                # Override QoS settings for minimal latency
-                'qos_overrides./pointcloud_interpolation_node.subscription.velodyne_points.depth': 1,
-                'qos_overrides./pointcloud_interpolation_node.subscription.velodyne_points.reliability': 'best_effort',
-                'qos_overrides./pointcloud_interpolation_node.publisher.interpolated_point_cloud.depth': 1,
-                'qos_overrides./pointcloud_interpolation_node.publisher.interpolated_point_cloud.reliability': 'best_effort',
-            }
-        ],
+        parameters=[config],
         arguments=['--ros-args', '--log-level', log_level]
     )
 
