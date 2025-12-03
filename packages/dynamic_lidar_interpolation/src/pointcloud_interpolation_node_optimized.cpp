@@ -359,6 +359,13 @@ private:
             sensor_msgs::msg::PointCloud2 fused_pcl_msg;
             pcl::toROSMsg(*interpolated_dense_cloud, fused_pcl_msg);
             fused_pcl_msg.header = lidar_msg->header;
+
+            // Fix dimensions for unorganized cloud (prevents RViz errors)
+            fused_pcl_msg.height = 1;
+            fused_pcl_msg.width = interpolated_dense_cloud->points.size();
+            fused_pcl_msg.row_step = fused_pcl_msg.width * fused_pcl_msg.point_step;
+            fused_pcl_msg.is_dense = true;
+
             interpolated_point_cloud_pub_->publish(fused_pcl_msg);
 
             finish = std::chrono::high_resolution_clock::now();
