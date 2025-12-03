@@ -107,20 +107,20 @@ class PCDetNode(Node):
             PointCloud2,
             args.pointcloud_topic,
             self.pointcloud_callback,
-            QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=2)
+            QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=1)  # Optimized: depth=1 for minimal latency
         )
 
         # Publisher for corrected point cloud
         self.corrected_pc_pub = self.create_publisher(
             PointCloud2,
             'corrected_pointcloud',
-            QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=5)
+            QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=1)  # Optimized: depth=1 for minimal latency
         )
         
         self.marker_pub = self.create_publisher(
             MarkerArray,
             'detected_objects',
-            QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=15)
+            QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=1)  # Optimized: depth=1 for minimal latency
         )
         
         # Open3D visualization (optional)
