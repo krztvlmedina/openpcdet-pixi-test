@@ -108,10 +108,11 @@ namespace pointcloud_interpolation
             const int imageCols = rangeImageSpherical.width;
             const int imageRows = rangeImageSpherical.height;
 
-            // Step 2: Initialize Matrix for Range Data
+            // Step 2: Initialize Matrices for Range and Height Data
             Eigen::MatrixXd rangeMatrix = Eigen::MatrixXd::Constant(imageRows, imageCols, extrapolationValue);
+            Eigen::MatrixXd heightMatrix = Eigen::MatrixXd::Constant(imageRows, imageCols, extrapolationValue);
 
-            // Populate range matrix
+            // Populate range and height matrices
             for (int col = 0; col < imageCols; ++col)
             {
                 for (int row = 0; row < imageRows; ++row)
@@ -120,61 +121,69 @@ namespace pointcloud_interpolation
                     if (!std::isinf(point.range) && point.range >= minRange && point.range <= maxRange)
                     {
                         rangeMatrix(row, col) = static_cast<double>(point.range);
+                        heightMatrix(row, col) = static_cast<double>(point.z);
                     }
                 }
             }
 
-            // Step 3: Perform 2D Interpolation on Range Only
+            // Step 3: Perform 2D Interpolation
             Eigen::MatrixXd interpolatedRange;
+            Eigen::MatrixXd interpolatedHeight;
 
             if (interpolationMethod == "linear")
             {
                 interpolatedRange = bilinearInterpolation(rangeMatrix, scaleFactorX, scaleFactorY, extrapolationValue);
+                interpolatedHeight = bilinearInterpolation(heightMatrix, scaleFactorX, scaleFactorY, extrapolationValue);
             }
             else if (interpolationMethod == "nearest")
             {
                 interpolatedRange = nearestNeighborInterpolation(rangeMatrix, scaleFactorX, scaleFactorY, extrapolationValue);
+                interpolatedHeight = nearestNeighborInterpolation(heightMatrix, scaleFactorX, scaleFactorY, extrapolationValue);
             }
             else if (interpolationMethod == "bilateral")
             {
                 interpolatedRange = bilateralInterpolation(rangeMatrix, scaleFactorX, scaleFactorY, extrapolationValue);
+                interpolatedHeight = bilateralInterpolation(heightMatrix, scaleFactorX, scaleFactorY, extrapolationValue);
             }
             else if (interpolationMethod == "edgeAware")
             {
                 interpolatedRange = edgeAwareInterpolation(rangeMatrix, scaleFactorX, scaleFactorY, extrapolationValue);
+                interpolatedHeight = edgeAwareInterpolation(heightMatrix, scaleFactorX, scaleFactorY, extrapolationValue);
             }
             else if (interpolationMethod == "spline")
             {
                 interpolatedRange = splineInterpolation(rangeMatrix, scaleFactorX, scaleFactorY, extrapolationValue);
+                interpolatedHeight = splineInterpolation(heightMatrix, scaleFactorX, scaleFactorY, extrapolationValue);
             }
             else
             {
                 // Default to linear interpolation if method is unknown
                 interpolatedRange = bilinearInterpolation(rangeMatrix, scaleFactorX, scaleFactorY, extrapolationValue);
+                interpolatedHeight = bilinearInterpolation(heightMatrix, scaleFactorX, scaleFactorY, extrapolationValue);
             }
 
             // Step 4: Post-Processing Interpolated Data
             if (applyVarianceFilter)
             {
-                smoothIsolatedPoints(interpolatedRange, extrapolationValue);
-                applyVarianceFiltering(interpolatedRange, maxAllowedVariance, extrapolationValue);
+                smoothIsolatedPoints(interpolatedRange, interpolatedHeight, extrapolationValue);
+                applyVarianceFiltering(interpolatedRange, interpolatedHeight, maxAllowedVariance, extrapolationValue);
             }
 
             // Step 5: Reconstruct 3D Point Cloud
             pcl::PointCloud<pcl::PointXYZ>::Ptr densePointCloud(new pcl::PointCloud<pcl::PointXYZ>());
             densePointCloud->reserve(static_cast<size_t>(interpolatedRange.size()));
 
-            const double azimuthFactor = (2.0 * M_PI) / static_cast<double>(interpolatedRange.cols() - 1);
-            const double elevationFactor = M_PI / static_cast<double>(interpolatedRange.rows() - 1);
+            const double azimuthFactor = pcl::deg2rad(maxAngleWidth) / static_cast<double>(interpolatedRange.cols() - 1);
+            const double elevationFactor = pcl::deg2rad(maxAngleHeight) / static_cast<double>(interpolatedRange.rows() - 1);
 
             for (int row = 0; row < interpolatedRange.rows(); ++row)
             {
-                double elevation = M_PI_2 - (M_PI * row) / static_cast<double>(interpolatedRange.rows() - 1);
+                double elevation = pcl::deg2rad(maxAngleHeight) / 2.0 - (elevationFactor * row);
 
                 for (int col = 0; col < interpolatedRange.cols(); ++col)
                 {
                     // Calculate azimuth angle
-                    double azimuth = M_PI - (azimuthFactor * col);
+                    double azimuth = pcl::deg2rad(maxAngleWidth) / 2.0 - (azimuthFactor * col);
 
                     // Normalize azimuth to [0, 2*PI)
                     if (azimuth < 0.0)
@@ -208,19 +217,19 @@ namespace pointcloud_interpolation
                         continue;
 
                     double range = interpolatedRange(row, col);
+                    double height = interpolatedHeight(row, col);
 
                     if (std::isnan(range) || range <= 0.0)
                         continue;
 
-                    // Compute 3D coordinates using spherical coordinates
-                    // x = range * cos(elevation) * cos(azimuth)
-                    // y = range * cos(elevation) * sin(azimuth)
-                    // z = range * sin(elevation)
-                    double cosElevation = std::cos(elevation);
+                    // Calculate horizontal range component
+                    double horizontalRange = (range > height) ? std::sqrt(range * range - height * height) : 0.0;
+
+                    // Compute 3D coordinates
                     pcl::PointXYZ point;
-                    point.x = range * cosElevation * std::cos(azimuth);
-                    point.y = range * cosElevation * std::sin(azimuth);
-                    point.z = range * std::sin(elevation);
+                    point.x = horizontalRange * std::cos(azimuth);
+                    point.y = horizontalRange * std::sin(azimuth);
+                    point.z = height;
 
                     densePointCloud->points.emplace_back(point);
                 }
@@ -243,18 +252,20 @@ namespace pointcloud_interpolation
     private:
  
         /**
-         * @brief Smooths isolated points in the interpolated range matrix by zeroing them out.
+         * @brief Smooths isolated points in the interpolated matrices by zeroing them out.
          *
          * @param rangeMatrix Reference to the interpolated range matrix.
+         * @param heightMatrix Reference to the interpolated height matrix.
          * @param extrapolationValue The value used for extrapolation.
          */
-        void smoothIsolatedPoints(Eigen::MatrixXd &rangeMatrix, double extrapolationValue)
+        void smoothIsolatedPoints(Eigen::MatrixXd &rangeMatrix, Eigen::MatrixXd &heightMatrix, double extrapolationValue)
         {
             const int rows = rangeMatrix.rows();
             const int cols = rangeMatrix.cols();
 
-            // Temporary matrix to store updated values
+            // Temporary matrices to store updated values
             Eigen::MatrixXd rangeTemp = rangeMatrix;
+            Eigen::MatrixXd heightTemp = heightMatrix;
 
             // Iterate through each cell, excluding the border
             for (int i = 1; i < rows - 1; ++i)
@@ -286,33 +297,40 @@ namespace pointcloud_interpolation
                         if (!hasValidNeighbor)
                         {
                             rangeTemp(i, j) = 0.0;
+                            heightTemp(i, j) = 0.0;
                         }
                     }
                 }
             }
 
-            // Update original matrix
+            // Update original matrices
             rangeMatrix = rangeTemp;
+            heightMatrix = heightTemp;
         }
 
         /**
-         * @brief Applies variance filtering to the interpolated range matrix.
+         * @brief Applies variance filtering to the interpolated matrices.
          *
-         * This function examines each element in the range matrix. For each element, it considers a 3x3 window
+         * This function examines each element in the range and height matrices. For each element, it considers a 3x3 window
          * around it (handling edge boundaries). It computes the variance of valid values within this window. If the variance
-         * exceeds the specified maximum, the corresponding element is set to the extrapolation value.
+         * exceeds the specified maximum, the corresponding elements in both matrices are set to the extrapolation value.
          *
          * @param rangeMatrix Reference to the interpolated range matrix.
+         * @param heightMatrix Reference to the interpolated height matrix.
          * @param maxVariance The maximum allowed variance.
          * @param extrapolationValue The value to assign for elements exceeding the variance threshold.
          */
-        void applyVarianceFiltering(Eigen::MatrixXd &rangeMatrix, double maxVariance, double extrapolationValue)
+        void applyVarianceFiltering(Eigen::MatrixXd &rangeMatrix, Eigen::MatrixXd &heightMatrix, double maxVariance, double extrapolationValue)
         {
+            // Ensure that both matrices have the same dimensions
+            assert(rangeMatrix.rows() == heightMatrix.rows() && rangeMatrix.cols() == heightMatrix.cols());
+
             const int rows = rangeMatrix.rows();
             const int cols = rangeMatrix.cols();
 
-            // Create copy to store updated values
+            // Create copies to store updated values
             Eigen::MatrixXd rangeTemp = rangeMatrix;
+            Eigen::MatrixXd heightTemp = heightMatrix;
 
             // Define the window size (3x3)
             const int windowSize = 3;
@@ -362,13 +380,15 @@ namespace pointcloud_interpolation
                         if (variance > maxVariance)
                         {
                             rangeTemp(i, j) = extrapolationValue;
+                            heightTemp(i, j) = extrapolationValue;
                         }
                     }
                 }
             }
 
-            // Update the original matrix with the filtered values
+            // Update the original matrices with the filtered values
             rangeMatrix = std::move(rangeTemp);
+            heightMatrix = std::move(heightTemp);
         }
     
     };
