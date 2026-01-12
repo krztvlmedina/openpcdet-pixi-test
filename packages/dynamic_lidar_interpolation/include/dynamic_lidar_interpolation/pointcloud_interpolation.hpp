@@ -173,30 +173,17 @@ namespace pointcloud_interpolation
             pcl::PointCloud<pcl::PointXYZ>::Ptr densePointCloud(new pcl::PointCloud<pcl::PointXYZ>());
             densePointCloud->reserve(static_cast<size_t>(interpolatedRange.size()));
 
-            // For 360° horizontal FOV, the range image wraps around (first and last columns are adjacent)
-            // so we divide by cols instead of (cols - 1) to get correct angular spacing
-            const bool fullHorizontalWraparound = (std::abs(maxAngleWidth - 360.0) < 1e-6);
-            const double azimuthFactor = pcl::deg2rad(maxAngleWidth) / static_cast<double>(
-                fullHorizontalWraparound ? interpolatedRange.cols() : (interpolatedRange.cols() - 1));
-            const double elevationFactor = pcl::deg2rad(maxAngleHeight) / static_cast<double>(interpolatedRange.rows() - 1);
+            const double azimuthFactor = (2.0 * M_PI) / static_cast<double>(interpolatedRange.cols() - 1);
+            const double elevationFactor = M_PI / static_cast<double>(interpolatedRange.rows() - 1);
 
             for (int row = 0; row < interpolatedRange.rows(); ++row)
             {
-                double elevation = pcl::deg2rad(maxAngleHeight) / 2.0 - (elevationFactor * row);
+                double elevation = M_PI_2 - (M_PI * row) / static_cast<double>(interpolatedRange.rows() - 1);
 
                 for (int col = 0; col < interpolatedRange.cols(); ++col)
                 {
                     // Calculate azimuth angle
-                    // For full 360° wraparound, start at -π; otherwise center the FOV
-                    double azimuth;
-                    if (fullHorizontalWraparound)
-                    {
-                        azimuth = -M_PI + (azimuthFactor * col);
-                    }
-                    else
-                    {
-                        azimuth = pcl::deg2rad(maxAngleWidth) / 2.0 - (azimuthFactor * col);
-                    }
+                    double azimuth = M_PI - (azimuthFactor * col);
 
                     // Normalize azimuth to [0, 2*PI)
                     if (azimuth < 0.0)
