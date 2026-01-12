@@ -27,11 +27,16 @@ import struct
 try:
     import bin_file_utils
 except ImportError:
-    # Try to import from the same directory
     import os
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    # bin_file_utils is in the pointcloud_utils package
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    pointcloud_utils_scripts = os.path.join(
+        os.path.dirname(os.path.dirname(script_dir)),
+        'pointcloud_utils',
+        'scripts'
+    )
+    sys.path.insert(0, pointcloud_utils_scripts)
     import bin_file_utils
-
 
 class BinFileInterpolator(Node):
     """
