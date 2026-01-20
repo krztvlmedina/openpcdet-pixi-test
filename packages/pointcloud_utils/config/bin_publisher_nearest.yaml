@@ -1,0 +1,22 @@
+bin_publisher_node:
+  ros__parameters:
+    # Directory containing .bin files to publish
+    bin_directory: ""  # REQUIRED: Set this to your .bin files directory
+
+    # Publish rate in Hz
+    publish_rate: 10.0
+
+    # Loop through files continuously
+    loop: true
+
+    # Use file modification timestamps instead of current time
+    use_file_timestamps: false
+
+    # Frame ID for published point clouds
+    frame_id: "velodyne"
+
+    # Topic name for publishing
+    topic: "velodyne_points"
+
+    # Verbose logging
+    verbose: true

@@ -78,10 +78,10 @@ args = [{ arg = "script_path", default = "src/yolo-lidar.py" }]
 # depends-on = [{task = "play_velodyne_bag"}]
 
 [tasks.interpolation_node]
-cmd = "ros2 launch dynamic_lidar_interpolation pointcloud_interpolation_launch.py log_level:={{ log_level }} config_file:={{ config_file }}"
+cmd = "ros2 launch dynamic_lidar_interpolation pointcloud_interpolation_optimized_launch.py log_level:={{ log_level }} config_file:={{ config_file }}"
 args = [
     { arg = "log_level", default = "info" },
-    { arg = "config_file", default = "/packages/dynamic_lidar_interpolation/config/interpolation_config.yaml" },
+    { arg = "config_file", default = "/packages/dynamic_lidar_interpolation/config/interpolation_config_optimized.yaml" },
 ]
 cwd = "packages/dynamic_lidar_interpolation/launch"
 
@@ -89,7 +89,8 @@ cwd = "packages/dynamic_lidar_interpolation/launch"
 cmd = "ros2 launch pointcloud_utils bin_publisher_launch.py log_level:={{ log_level }} config_file:={{ config_file }}"
 args = [
     { arg = "log_level", default = "info" },
-    { arg = "config_file", default = "/app/packages/poincloud_utils/config/bin_publisher.yaml" }
+    { arg = "config_file", default = "/app/packages/poincloud_utils/config/bin_publisher.yaml" },     
+    { arg = "bin_directory", default = "/app/data/interpolated-kitti/nearest_01/training/velodyne/" }	    
 ]
 cwd = "packages/pointcloud_utils/launch"
 
