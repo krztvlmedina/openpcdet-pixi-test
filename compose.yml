@@ -92,6 +92,8 @@ services:
       - ../datos/kitti/db_infos:/OpenPCDet/data/kitti/db_infos/:cached
       - ../datos/reduced-kitti/db_infos:/OpenPCDet/data/reduced-kitti/db_infos/:cached
       - ../datos/output:/OpenPCDet/output:cached
+      - ../datos/interpolated-kitti/:/OpenPCDet/data/interpolated-kitti:ro
+
 
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
