@@ -110,8 +110,8 @@ class BinInterpolationPipeline:
                 sensor_translation=interp_config.get('sensor_translation', [0.0, 0.0, 0.0]),
                 rotation_angle_x=interp_config.get('rotation_angle_x', 0.0),
                 extrapolation_value=extrap_value,
-                min_ang_fov=range_config.get('min_angle_fov', 0.0),
-                max_ang_fov=range_config.get('max_angle_fov', 360.0),
+                min_ang_fov=range_config.get('min_ang_fov', 0.0),
+                max_ang_fov=range_config.get('max_ang_fov', 360.0),
             )
 
             num_output_points = len(interpolated_points)
