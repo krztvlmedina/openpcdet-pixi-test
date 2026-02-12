@@ -86,11 +86,11 @@ args = [
 cwd = "packages/dynamic_lidar_interpolation/launch"
 
 [tasks.bin_publisher]
-cmd = "ros2 launch pointcloud_utils bin_publisher_launch.py log_level:={{ log_level }} config_file:={{ config_file }}"
+cmd = "ros2 launch pointcloud_utils bin_publisher_launch.py log_level:={{ log_level }} config_file:={{ config_file }} bin_directory:={{ bin_directory }}"
 args = [
     { arg = "log_level", default = "info" },
     { arg = "config_file", default = "/app/packages/poincloud_utils/config/bin_publisher.yaml" },     
-    { arg = "bin_directory", default = "/app/data/interpolated-kitti/nearest_01/training/velodyne/" }	    
+    { arg = "bin_directory", default = "/app/data/output/interpolated-kitti/nearest_01/training/velodyne/" }	    
 ]
 cwd = "packages/pointcloud_utils/launch"
 

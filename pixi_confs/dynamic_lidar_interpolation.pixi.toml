@@ -1,11 +1,14 @@
-[package.build.backend]
+[workspace]
 channels = [
-    "robostack-humble", 
-    "conda-forge", 
-    "https://prefix.dev/pixi-build-backends"
+    # "https://prefix.dev/pixi-build-backends",
+    "https://prefix.dev/conda-forge",
+    "https://prefix.dev/robostack-humble",
     ]
-name = "pixi-build-ros"
-version = "*"
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+
+[package.build]
+backend ={ name = "pixi-build-ros", version = "*"}
 
 [package.build.config]
 distro = "humble"

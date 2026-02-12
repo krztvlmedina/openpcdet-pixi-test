@@ -411,6 +411,9 @@ class PCDetNode(Node):
         delete_marker.header = header
         delete_marker.action = Marker.DELETEALL
         marker_array.markers.append(delete_marker)
+        # marker_lifetime_nano = 200000000  # 0.2 seconds
+        marker_lifetime_nano = 0
+        marker_lifetime_sec = 0
         
         # Create markers for each detected object
         for i, (box, score, label) in enumerate(zip(boxes, scores, labels)):
@@ -443,8 +446,8 @@ class PCDetNode(Node):
             # self.get_logger().info(f'Color for label {label}: {marker.color}')
             marker.color.a = min(float(score), 1.0)
             
-            marker.lifetime.sec = 0
-            marker.lifetime.nanosec = 200000000  # 0.2 seconds
+            marker.lifetime.sec = marker_lifetime_sec
+            marker.lifetime.nanosec = marker_lifetime_nano
             
             marker_array.markers.append(marker)
             
@@ -469,9 +472,9 @@ class PCDetNode(Node):
             text_marker.color.b = 1.0
             text_marker.color.a = 1.0
             
-            text_marker.lifetime.sec = 0
-            text_marker.lifetime.nanosec = 200000000
-            
+            text_marker.lifetime.sec = marker_lifetime_sec
+            text_marker.lifetime.nanosec = marker_lifetime_nano
+
             marker_array.markers.append(text_marker)
         
         self.get_logger().info(f'Publishing {len(marker_array.markers)-1} markers')

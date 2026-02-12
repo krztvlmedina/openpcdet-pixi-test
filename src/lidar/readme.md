@@ -6,6 +6,7 @@ pero se puede arreglar agregando comillas al valor asignado
 
 No obstante, esto ya está considerado en el Dockerfile del contenedor.
 
+## Ejecución de modelos en tiempo real
 
 PointRCNN:
 
@@ -14,6 +15,10 @@ python3 src/lidar/tools/ros2_node.py --cfg_file src/lidar/tools/cfgs/kitti_model
 PartA2:
 
 python3 src/lidar/tools/ros2_node.py --cfg_file src/lidar/tools/cfgs/kitti_models/parta2_anchor.yaml --ckpt data/pretrained-models/PartA2_7940.pth --pointcloud_topic \interpolated_point_cloud
+
+Second_iou:
+
+python3 src/lidar/tools/ros2_node.py --cfg_file src/lidar/tools/cfgs/kitti_models/interpolated/second_iou.yaml --ckpt data/pretrained-models/second_iou7909.pth --pointcloud_topic \interpolated_point_cloud
 
 
 Testing:

@@ -144,7 +144,7 @@ services:
       - ../datos/reduced-kitti/:/app/data/reduced-kitti:cached
       - ../datos/interpolated-kitti/:/app/data/output/interpolated-kitti:cached
 
-      - ./packages/dynamic_lidar_interpolation:/app/packages/dynamic_lidar_interpolation:ro
+      # - ./packages/dynamic_lidar_interpolation:/app/packages/dynamic_lidar_interpolation:cached
       # - ./packages/pointcloud_utils:/app/packages/pointcloud_utils:cached
       - ./pixi_confs/ros2.pixi.toml:/app/pixi.toml:cached
       - ./pixi_confs/dynamic_lidar_interpolation.pixi.toml:/app/packages/dynamic_lidar_interpolation/pixi.toml:cached
