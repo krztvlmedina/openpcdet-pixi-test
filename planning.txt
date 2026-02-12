@@ -1,0 +1,36 @@
+000182.bin (30498 points)
+[bin_publisher_node-1] [INFO] [1769194861.500693875] [bin_publisher_node]: Published [184/7481]: 000183.bin (29797 points)
+[bin_publisher_node-1] [INFO] [1769194864.834136732] [bin_publisher_node]: Published [185/7481]: 000184.bin (32149 points)
+[bin_publisher_node-1] [INFO] [1769194868.167187024] [bin_publisher_node]: Published [186/7481]: 000185.bin (31432 points)
+[bin_publisher_node-1] [INFO] [1769194871.500088642] [bin_publisher_node]: Published [187/7481]: 000186.bin (29167 points)
+[bin_publisher_node-1] [INFO] [1769194874.833519198] [bin_publisher_node]: Published [188/7481]: 000187.bin (31128 points)
+[bin_publisher_node-1] [INFO] [1769194878.166862383] [bin_publisher_node]: Published [189/7481]: 000188.bin (32933 points)
+[bin_publisher_node-1] [INFO] [1769194881.500507554] [bin_publisher_node]: Published [190/7481]: 000189.bin (31574 points)
+[bin_publisher_node-1] [INFO] [1769194884.832285754] [bin_publisher_node]: Published [191/7481]: 000190.bin (29101 points)
+[bin_publisher_node-1] [INFO] [1769194888.164934295] [bin_publisher_node]: Published [192/7481]: 000191.bin (26298 points)
+[bin_publisher_node-1] [INFO] [1769194891.498720119] [bin_publisher_node]: Published [193/7481]: 000192.bin (30124 points)
+ 
+
+ REVISAR ESTOS BINS, HAY UNO BIEN BUENO CON HARTOS PEATONES
+
+
+
+
+
+ 000424.bin (31527 points)
+[bin_publisher_node-1] [INFO] [1769196371.867758807] [bin_publisher_node]: Published [426/7481]: 000425.bin
+
+
+REVISAR ESTOS BINS, TIENEN HARTOS AUTOS
+
+
+Correr de shell:
+	> sudo docker exec -it <nombre-container> /bin/bash
+		> pixi shell
+			bin_publisher: >  pixi run bin_publisher 
+
+PCLs a revisar:
+
+- 00183 algunos autos
+- 00185 varios autos
+- 00186 varios autos

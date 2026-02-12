@@ -35,7 +35,7 @@ for DATASET_PATH in ${DATA_ROOT}/*; do
             --batch_size 1 \
             --ckpt data/pretrained-models/${CKPT}
 
-        SRC_DIR=${OUTPUT_ROOT}/kitti_models/${MODEL}
+        SRC_DIR=${OUTPUT_ROOT}/lidar/tools/cfgs/kitti_models/interpolated/${MODEL}        
         DST_DIR=${RUN_DIR}/${DATASET}/${MODEL}
 
         mkdir -p "$(dirname "${DST_DIR}")"
