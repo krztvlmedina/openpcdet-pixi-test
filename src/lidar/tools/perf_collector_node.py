@@ -2,12 +2,17 @@
 """
 Performance Collector Node for Real-Time Pipeline Evaluation
 
-This node subscribes to performance metrics from the interpolation and detection
-nodes, correlates the messages by timestamp, computes derived metrics, and
-outputs results to CSV and JSON files.
+This node subscribes to performance metrics (published as JSON strings on
+std_msgs/String topics) from the interpolation and detection nodes, correlates
+the messages by sequence_id, computes derived metrics, and outputs results
+to CSV and JSON files.
+
+Both publishers (C++ interpolation node, Python detection node) serialize
+performance data as JSON inside std_msgs/msg/String to avoid cross-package
+build dependencies on custom message types.
 
 Usage:
-    ros2 run <package> perf_collector_node.py --ros-args \
+    python3 src/lidar/tools/perf_collector_node.py --ros-args \
         -p output_dir:=/path/to/output \
         -p warmup_frames:=10 \
         -p max_frames:=500 \
@@ -15,14 +20,10 @@ Usage:
         -p model_name:=parta2_anchor
 """
 
-import argparse
 import csv
 import json
-import os
-import statistics
 import time
-from collections import deque
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -30,13 +31,7 @@ from typing import Dict, List, Optional
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
-
-try:
-    from perf_msgs.msg import InterpolationPerf, DetectionPerf
-    PERF_MSGS_AVAILABLE = True
-except ImportError:
-    PERF_MSGS_AVAILABLE = False
-    print("Warning: perf_msgs package not available. Performance collector will not work.")
+from std_msgs.msg import String
 
 
 @dataclass
@@ -148,7 +143,6 @@ class PerfCollectorNode(Node):
         self.declare_parameter('max_frames', 0)  # 0 = unlimited
         self.declare_parameter('config_name', 'default')
         self.declare_parameter('model_name', 'unknown')
-        self.declare_parameter('timestamp_tolerance_ms', 50.0)  # Tolerance for timestamp matching
 
         # Get parameters
         self.output_dir = Path(self.get_parameter('output_dir').value)
@@ -156,7 +150,6 @@ class PerfCollectorNode(Node):
         self.max_frames = self.get_parameter('max_frames').value
         self.config_name = self.get_parameter('config_name').value
         self.model_name = self.get_parameter('model_name').value
-        self.timestamp_tolerance = self.get_parameter('timestamp_tolerance_ms').value / 1000.0
 
         # Create output directory
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -166,9 +159,9 @@ class PerfCollectorNode(Node):
         self.csv_filename = self.output_dir / f"perf_results_{self.config_name}_{self.model_name}_{timestamp_str}.csv"
         self.json_filename = self.output_dir / f"summary_{self.config_name}_{self.model_name}_{timestamp_str}.json"
 
-        # Pending messages buffer (waiting for correlation)
-        self.pending_interp: Dict[int, InterpolationPerf] = {}  # keyed by sequence_id
-        self.pending_detect: Dict[int, DetectionPerf] = {}  # keyed by sequence_id
+        # Pending messages buffer (waiting for correlation), keyed by sequence_id
+        self.pending_interp: Dict[int, dict] = {}
+        self.pending_detect: Dict[int, dict] = {}
 
         # Completed frame metrics
         self.completed_frames: List[FrameMetrics] = []
@@ -184,25 +177,16 @@ class PerfCollectorNode(Node):
         self.stats_output_pts = RunningStats()
         self.stats_detection_count = RunningStats()
 
-        # Subscribers
-        if PERF_MSGS_AVAILABLE:
-            self.interp_sub = self.create_subscription(
-                InterpolationPerf,
-                '/perf/interpolation',
-                self.interp_callback,
-                QoSProfile(reliability=ReliabilityPolicy.RELIABLE, depth=100)
-            )
-            self.detect_sub = self.create_subscription(
-                DetectionPerf,
-                '/perf/detection',
-                self.detect_callback,
-                QoSProfile(reliability=ReliabilityPolicy.RELIABLE, depth=100)
-            )
-            self.get_logger().info(f"Performance collector initialized. Output dir: {self.output_dir}")
-            self.get_logger().info(f"Config: {self.config_name}, Model: {self.model_name}")
-            self.get_logger().info(f"Warmup frames: {self.warmup_frames}, Max frames: {self.max_frames}")
-        else:
-            self.get_logger().error("perf_msgs package not available. Collector will not function.")
+        # Subscribe to JSON string topics (no custom msg dependency)
+        qos = QoSProfile(reliability=ReliabilityPolicy.RELIABLE, depth=100)
+        self.interp_sub = self.create_subscription(
+            String, '/perf/interpolation', self.interp_callback, qos)
+        self.detect_sub = self.create_subscription(
+            String, '/perf/detection', self.detect_callback, qos)
+
+        self.get_logger().info(f"Performance collector initialized. Output dir: {self.output_dir}")
+        self.get_logger().info(f"Config: {self.config_name}, Model: {self.model_name}")
+        self.get_logger().info(f"Warmup frames: {self.warmup_frames}, Max frames: {self.max_frames}")
 
         # CSV file handle (opened lazily)
         self.csv_file = None
@@ -212,40 +196,48 @@ class PerfCollectorNode(Node):
         self.first_frame_time: Optional[float] = None
         self.last_frame_time: Optional[float] = None
 
-    def interp_callback(self, msg: 'InterpolationPerf'):
-        """Handle incoming interpolation performance message."""
+    def interp_callback(self, msg: String):
+        """Handle incoming interpolation performance JSON message."""
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError as e:
+            self.get_logger().warn(f"Failed to parse interp perf JSON: {e}")
+            return
+
         self.total_received_interp += 1
-        seq_id = msg.sequence_id
+        seq_id = data.get("sequence_id", -1)
 
         self.get_logger().debug(f"Received interp perf for seq {seq_id}")
 
         # Check if we already have detection data for this sequence
         if seq_id in self.pending_detect:
-            detect_msg = self.pending_detect.pop(seq_id)
-            self._process_correlated_pair(msg, detect_msg)
+            detect_data = self.pending_detect.pop(seq_id)
+            self._process_correlated_pair(data, detect_data)
         else:
-            # Store and wait for detection
-            self.pending_interp[seq_id] = msg
+            self.pending_interp[seq_id] = data
 
-        # Cleanup old pending messages (older than 100 sequence IDs)
         self._cleanup_pending(seq_id)
 
-    def detect_callback(self, msg: 'DetectionPerf'):
-        """Handle incoming detection performance message."""
+    def detect_callback(self, msg: String):
+        """Handle incoming detection performance JSON message."""
+        try:
+            data = json.loads(msg.data)
+        except json.JSONDecodeError as e:
+            self.get_logger().warn(f"Failed to parse detect perf JSON: {e}")
+            return
+
         self.total_received_detect += 1
-        seq_id = msg.sequence_id
+        seq_id = data.get("sequence_id", -1)
 
         self.get_logger().debug(f"Received detect perf for seq {seq_id}")
 
         # Check if we already have interpolation data for this sequence
         if seq_id in self.pending_interp:
-            interp_msg = self.pending_interp.pop(seq_id)
-            self._process_correlated_pair(interp_msg, msg)
+            interp_data = self.pending_interp.pop(seq_id)
+            self._process_correlated_pair(interp_data, data)
         else:
-            # Store and wait for interpolation
-            self.pending_detect[seq_id] = msg
+            self.pending_detect[seq_id] = data
 
-        # Cleanup old pending messages
         self._cleanup_pending(seq_id)
 
     def _cleanup_pending(self, current_seq: int):
@@ -262,26 +254,26 @@ class PerfCollectorNode(Node):
             self.get_logger().warn(f"Dropping unmatched detect message for seq {k}")
             del self.pending_detect[k]
 
-    def _process_correlated_pair(self, interp_msg: 'InterpolationPerf', detect_msg: 'DetectionPerf'):
-        """Process a correlated pair of interpolation and detection messages."""
+    def _process_correlated_pair(self, interp_data: dict, detect_data: dict):
+        """Process a correlated pair of interpolation and detection JSON data."""
         frame = FrameMetrics(
-            sequence_id=interp_msg.sequence_id,
+            sequence_id=interp_data.get("sequence_id", 0),
             # Interpolation data
-            interp_receive=interp_msg.receive_timestamp,
-            interp_start=interp_msg.process_start_timestamp,
-            interp_end=interp_msg.process_end_timestamp,
-            interp_publish=interp_msg.publish_timestamp,
-            interp_input_pts=interp_msg.input_point_count,
-            interp_output_pts=interp_msg.output_point_count,
-            interp_config=interp_msg.config_name,
+            interp_receive=interp_data.get("receive_timestamp", 0.0),
+            interp_start=interp_data.get("process_start_timestamp", 0.0),
+            interp_end=interp_data.get("process_end_timestamp", 0.0),
+            interp_publish=interp_data.get("publish_timestamp", 0.0),
+            interp_input_pts=interp_data.get("input_point_count", 0),
+            interp_output_pts=interp_data.get("output_point_count", 0),
+            interp_config=interp_data.get("config_name", ""),
             # Detection data
-            detect_receive=detect_msg.receive_timestamp,
-            detect_preproc_end=detect_msg.preprocess_end_timestamp,
-            detect_infer_end=detect_msg.inference_end_timestamp,
-            detect_postproc_end=detect_msg.postprocess_end_timestamp,
-            detect_input_pts=detect_msg.input_point_count,
-            detection_count=detect_msg.detection_count,
-            model_name=detect_msg.model_name,
+            detect_receive=detect_data.get("receive_timestamp", 0.0),
+            detect_preproc_end=detect_data.get("preprocess_end_timestamp", 0.0),
+            detect_infer_end=detect_data.get("inference_end_timestamp", 0.0),
+            detect_postproc_end=detect_data.get("postprocess_end_timestamp", 0.0),
+            detect_input_pts=detect_data.get("input_point_count", 0),
+            detection_count=detect_data.get("detection_count", 0),
+            model_name=detect_data.get("model_name", ""),
             has_interpolation=True,
             has_detection=True,
         )
@@ -367,7 +359,6 @@ class PerfCollectorNode(Node):
         # Calculate throughput
         throughput_fps = 0.0
         if self.first_frame_time and self.last_frame_time and effective_frames > 1:
-            # Get times of effective (non-warmup) frames
             effective_start = self.completed_frames[self.warmup_frames].interp_receive if len(self.completed_frames) > self.warmup_frames else self.first_frame_time
             duration = self.last_frame_time - effective_start
             if duration > 0:
@@ -444,10 +435,6 @@ class PerfCollectorNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-
-    if not PERF_MSGS_AVAILABLE:
-        print("Error: perf_msgs package not available. Please build and source it first.")
-        return
 
     node = PerfCollectorNode()
 

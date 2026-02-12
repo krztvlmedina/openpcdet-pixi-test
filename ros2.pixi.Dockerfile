@@ -12,12 +12,6 @@ COPY pixi_confs/dynamic_lidar_interpolation.pixi.toml /app/packages/dynamic_lida
 COPY packages/pointcloud_utils /app/packages/pointcloud_utils
 COPY pixi_confs/pointcloud_utils.pixi.toml /app/packages/pointcloud_utils/pixi.toml
 
-COPY src/lidar/tools/perf_msgs/ /app/packages/perf_msgs/
-COPY pixi_confs/perf_msgs.pixi.toml /app/packages/perf_msgs/pixi.toml
-
-RUN ls -R /app/packages
-RUN cat /app/packages/perf_msgs/package.xml
-
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
 # install dependencies to `/app/.pixi/envs/prod`

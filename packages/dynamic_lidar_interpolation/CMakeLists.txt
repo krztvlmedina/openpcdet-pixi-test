@@ -13,7 +13,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters)
 find_package(pcl_conversions REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(perf_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 # Find Python and pybind11 for Python bindings
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
@@ -36,10 +36,10 @@ add_executable(pointcloud_interpolation_node
 ament_target_dependencies(pointcloud_interpolation_node
   rclcpp
   sensor_msgs
+  std_msgs
   PCL
   pcl_conversions
   Eigen3
-  perf_msgs
 )
 
 target_link_libraries(pointcloud_interpolation_node

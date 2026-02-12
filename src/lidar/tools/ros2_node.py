@@ -17,14 +17,9 @@ from rclpy.qos import ReliabilityPolicy
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs_py import point_cloud2
 from visualization_msgs.msg import Marker, MarkerArray
-from std_msgs.msg import ColorRGBA, Header
+from std_msgs.msg import ColorRGBA, Header, String
 
-# Performance tracking - import conditionally
-try:
-    from perf_msgs.msg import DetectionPerf
-    PERF_MSGS_AVAILABLE = True
-except ImportError:
-    PERF_MSGS_AVAILABLE = False
+import json
 
 try:
     import open3d
@@ -135,18 +130,16 @@ class PCDetNode(Node):
             QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=1)  # Optimized: depth=1 for minimal latency
         )
 
-        # Performance tracking publisher
+        # Performance tracking publisher (JSON string to avoid custom msg dependency)
         self.perf_pub = None
-        if self.enable_perf_tracking and PERF_MSGS_AVAILABLE:
+        if self.enable_perf_tracking:
             from rclpy.qos import QoSReliabilityPolicy
             self.perf_pub = self.create_publisher(
-                DetectionPerf,
+                String,
                 '/perf/detection',
                 QoSProfile(reliability=QoSReliabilityPolicy.RELIABLE, depth=100)
             )
             self.get_logger().info(f"Performance tracking enabled. Model: {self.model_name}. Publishing to '/perf/detection'.")
-        elif self.enable_perf_tracking and not PERF_MSGS_AVAILABLE:
-            self.get_logger().warn("Performance tracking requested but perf_msgs package not available.")
 
         # Open3D visualization (optional)
         self.use_visualization = args.visualize
@@ -255,18 +248,22 @@ class PCDetNode(Node):
 
         self.get_logger().info(f'Inference ran in {time.time() - stepTime:.2f} seconds')
 
-        # Publish performance metrics if enabled
+        # Publish performance metrics as JSON string if enabled
         if self.enable_perf_tracking and self.perf_pub is not None:
-            perf_msg = DetectionPerf()
-            perf_msg.header = cloud_msg.header
-            perf_msg.sequence_id = self.sequence_id
-            perf_msg.input_point_count = input_point_count
-            perf_msg.detection_count = detection_count
-            perf_msg.receive_timestamp = receive_timestamp
-            perf_msg.preprocess_end_timestamp = preprocess_end_timestamp
-            perf_msg.inference_end_timestamp = inference_end_timestamp
-            perf_msg.postprocess_end_timestamp = postprocess_end_timestamp
-            perf_msg.model_name = self.model_name
+            perf_data = {
+                "sequence_id": self.sequence_id,
+                "header_stamp": f"{cloud_msg.header.stamp.sec}.{cloud_msg.header.stamp.nanosec}",
+                "frame_id": cloud_msg.header.frame_id,
+                "input_point_count": input_point_count,
+                "detection_count": detection_count,
+                "receive_timestamp": receive_timestamp,
+                "preprocess_end_timestamp": preprocess_end_timestamp,
+                "inference_end_timestamp": inference_end_timestamp,
+                "postprocess_end_timestamp": postprocess_end_timestamp,
+                "model_name": self.model_name,
+            }
+            perf_msg = String()
+            perf_msg.data = json.dumps(perf_data)
             self.perf_pub.publish(perf_msg)
             self.sequence_id += 1
 

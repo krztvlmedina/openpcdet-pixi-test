@@ -1,14 +1,16 @@
 [package.build.backend]
 channels = [
-    "robostack-humble", 
-    "conda-forge", 
-    "https://prefix.dev/pixi-build-backends"
-    ]
+    "robostack-humble",
+    "conda-forge",
+    "https://prefix.dev/pixi-build-backends",
+]
 name = "pixi-build-ros"
 version = "*"
 
 [package.build.config]
 distro = "humble"
 
+# perf_msgs only depends on std_msgs and rosidl generators,
+# both provided by ros-humble-desktop-full in the workspace.
+# No extra run-dependencies needed.
 [package.run-dependencies]
-ros-humble-pcl-ros = "*"

@@ -36,8 +36,10 @@
 #include <mutex>
 #include <Eigen/Dense>
 
-// Performance tracking message
-#include <perf_msgs/msg/interpolation_perf.hpp>
+// Performance tracking via JSON string (avoids cross-package build dependency)
+#include <std_msgs/msg/string.hpp>
+#include <sstream>
+#include <iomanip>
 
 using namespace std::chrono_literals;
 using rcl_interfaces::msg::SetParametersResult;
@@ -210,10 +212,10 @@ private:
         RCLCPP_INFO(this->get_logger(), "Initialized PointCloud2 publisher for '%s'.",
                     interpolated_point_cloud_topic_.c_str());
 
-        // Performance tracking publisher
+        // Performance tracking publisher (JSON string to avoid custom msg dependency)
         if (enable_perf_tracking_)
         {
-            perf_pub_ = this->create_publisher<perf_msgs::msg::InterpolationPerf>(
+            perf_pub_ = this->create_publisher<std_msgs::msg::String>(
                 "/perf/interpolation",
                 rclcpp::QoS(rclcpp::KeepLast(100)).reliable());
             RCLCPP_INFO(this->get_logger(), "Performance tracking enabled. Publishing to '/perf/interpolation'.");
@@ -392,19 +394,25 @@ private:
             fp_ms = finish-step;
             RCLCPP_DEBUG(this->get_logger(), "Published interpolated point cloud in %f milliseconds.", fp_ms);
 
-            // Publish performance metrics if enabled
+            // Publish performance metrics as JSON string if enabled
             if (enable_perf_tracking_ && perf_pub_)
             {
-                perf_msgs::msg::InterpolationPerf perf_msg;
-                perf_msg.header = lidar_msg->header;
-                perf_msg.sequence_id = sequence_id_++;
-                perf_msg.input_point_count = static_cast<uint32_t>(input_point_count);
-                perf_msg.output_point_count = static_cast<uint32_t>(output_point_count);
-                perf_msg.receive_timestamp = receive_timestamp;
-                perf_msg.process_start_timestamp = process_start_timestamp;
-                perf_msg.process_end_timestamp = process_end_timestamp;
-                perf_msg.publish_timestamp = publish_timestamp;
-                perf_msg.config_name = config_name_;
+                std::ostringstream oss;
+                oss << std::fixed << std::setprecision(6)
+                    << "{"
+                    << "\"sequence_id\":" << sequence_id_++
+                    << ",\"header_stamp\":" << lidar_msg->header.stamp.sec << "." << lidar_msg->header.stamp.nanosec
+                    << ",\"frame_id\":\"" << lidar_msg->header.frame_id << "\""
+                    << ",\"input_point_count\":" << static_cast<uint32_t>(input_point_count)
+                    << ",\"output_point_count\":" << static_cast<uint32_t>(output_point_count)
+                    << ",\"receive_timestamp\":" << receive_timestamp
+                    << ",\"process_start_timestamp\":" << process_start_timestamp
+                    << ",\"process_end_timestamp\":" << process_end_timestamp
+                    << ",\"publish_timestamp\":" << publish_timestamp
+                    << ",\"config_name\":\"" << config_name_ << "\""
+                    << "}";
+                std_msgs::msg::String perf_msg;
+                perf_msg.data = oss.str();
                 perf_pub_->publish(perf_msg);
             }
         }
@@ -766,7 +774,7 @@ private:
 
     // Publishers
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr interpolated_point_cloud_pub_;
-    rclcpp::Publisher<perf_msgs::msg::InterpolationPerf>::SharedPtr perf_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr perf_pub_;
 
     // Subscribers
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_lidar_;

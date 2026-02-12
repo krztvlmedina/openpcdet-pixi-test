@@ -30,7 +30,6 @@ ros-humble-navigation2 = "*"
 ros-humble-rviz2 = "*"
 tqdm = "*"
 
-ros-humble-perf-msgs = { path = "./packages/perf_msgs" }
 ros-humble-ros2-numpy = { path = "./packages/ros2_numpy" }
 ros-humble-dynamic-lidar-interpolation = { path = "./packages/dynamic_lidar_interpolation" }
 ros-humble-pointcloud-utils = { path = "./packages/pointcloud_utils" }
