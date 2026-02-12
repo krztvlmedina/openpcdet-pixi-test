@@ -19,6 +19,13 @@ from sensor_msgs_py import point_cloud2
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import ColorRGBA, Header
 
+# Performance tracking - import conditionally
+try:
+    from perf_msgs.msg import DetectionPerf
+    PERF_MSGS_AVAILABLE = True
+except ImportError:
+    PERF_MSGS_AVAILABLE = False
+
 try:
     import open3d
     import open3d_custom_vis_utils as V
@@ -67,10 +74,15 @@ class Ros2Dataset(DatasetTemplate):
 class PCDetNode(Node):
     def __init__(self, args, cfg):
         super().__init__('pcdet_node')
-        
+
         self.logger_pcdet = common_utils.create_logger()
         self.logger_pcdet.info('-----------------ROS2 PCDet Node-------------------------')
-        
+
+        # Performance tracking configuration
+        self.enable_perf_tracking = getattr(args, 'enable_perf_tracking', False)
+        self.model_name = getattr(args, 'model_name', 'unknown')
+        self.sequence_id = 0
+
         # Initialize dataset
         self.demo_dataset = Ros2Dataset(
             dataset_cfg=cfg.DATA_CONFIG,
@@ -80,7 +92,7 @@ class PCDetNode(Node):
             logger=self.logger_pcdet
         )
         self.processing_frame = False
-        
+
         self.get_logger().info(f"Dataset initialized with classes: {cfg.CLASS_NAMES}")
         self.get_logger().info("Building model...")
 
@@ -122,7 +134,20 @@ class PCDetNode(Node):
             'detected_objects',
             QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, depth=1)  # Optimized: depth=1 for minimal latency
         )
-        
+
+        # Performance tracking publisher
+        self.perf_pub = None
+        if self.enable_perf_tracking and PERF_MSGS_AVAILABLE:
+            from rclpy.qos import QoSReliabilityPolicy
+            self.perf_pub = self.create_publisher(
+                DetectionPerf,
+                '/perf/detection',
+                QoSProfile(reliability=QoSReliabilityPolicy.RELIABLE, depth=100)
+            )
+            self.get_logger().info(f"Performance tracking enabled. Model: {self.model_name}. Publishing to '/perf/detection'.")
+        elif self.enable_perf_tracking and not PERF_MSGS_AVAILABLE:
+            self.get_logger().warn("Performance tracking requested but perf_msgs package not available.")
+
         # Open3D visualization (optional)
         self.use_visualization = args.visualize
         if self.use_visualization and OPEN3D_FLAG:
@@ -140,34 +165,34 @@ class PCDetNode(Node):
 
     def pointcloud_callback(self, cloud_msg):
         """Callback function for point cloud messages"""
-        self.get_logger().info(f'Processing frame {self.frame_count} received in timestamp {time.time():.3f}')
-        start_time = time.time()
+        # Record receive timestamp for performance tracking
+        receive_timestamp = time.time()
+
+        self.get_logger().info(f'Processing frame {self.frame_count} received in timestamp {receive_timestamp:.3f}')
+        start_time = receive_timestamp
         if self.processing_frame:
             self.get_logger().warn('Still processing previous frame, skipping this one')
             self.frame_count += 1
             self.get_logger().info(f'Frame {self.frame_count} processed in {time.time() - start_time:.2f} seconds')
             return
-        
+
         self.processing_frame = True
         current_frame = self.frame_count
-        # data_len = len(cloud_msg.data)
-        # expected_len = cloud_msg.row_step * cloud_msg.height
 
-        # self.get_logger().info(
-        #     f"PointCloud2 dims: width={cloud_msg.width}, height={cloud_msg.height}, "
-        #     f"point_step={cloud_msg.point_step}, row_step={cloud_msg.row_step}, "
-        #     f"data_len={data_len}, expected_len={expected_len}"
         # Convert ROS2 PointCloud2 to numpy array
-
         stepTime = time.time()
         points = self.pointcloud2_to_array(cloud_msg)
 
         self.get_logger().info(f'PCL conversion processed in {time.time() - stepTime:.2f} seconds')
-        
+
         if points is None or len(points) == 0:
             self.get_logger().warn('Empty point cloud received')
+            self.processing_frame = False
             return
-        
+
+        # Store input point count for performance tracking
+        input_point_count = len(points)
+
         # Publish corrected point cloud
         stepTime = time.time()
         self.publish_corrected_pointcloud(points, cloud_msg.header)
@@ -175,26 +200,43 @@ class PCDetNode(Node):
 
         # Set points in dataset
         self.demo_dataset.set_points(points, self.frame_count)
-        
+
         # Run inference
         stepTime = time.time()
+        detection_count = 0
+        preprocess_end_timestamp = 0.0
+        inference_end_timestamp = 0.0
+        postprocess_end_timestamp = 0.0
+
         try:
             with torch.no_grad():
                 data_dict = self.demo_dataset[0]
                 data_dict = self.demo_dataset.collate_batch([data_dict])
                 load_data_to_gpu(data_dict)
+
+                # Record preprocess end timestamp
+                preprocess_end_timestamp = time.time()
+
                 pred_dicts, _ = self.model.forward(data_dict)
-                
+
+                # Record inference end timestamp
+                inference_end_timestamp = time.time()
+
                 # Extract predictions
                 pred_boxes = pred_dicts[0]['pred_boxes'].cpu().numpy()
                 pred_scores = pred_dicts[0]['pred_scores'].cpu().numpy()
                 pred_labels = pred_dicts[0]['pred_labels'].cpu().numpy()
-                
-                self.get_logger().info(f'Detected {len(pred_boxes)} objects')
+
+                detection_count = len(pred_boxes)
+
+                self.get_logger().info(f'Detected {detection_count} objects')
                 self.get_logger().info(f'Current frame: {cloud_msg.header.frame_id}, Timestamp: {cloud_msg.header.stamp.sec}.{cloud_msg.header.stamp.nanosec}')
                 # Publish markers
                 self.publish_markers(pred_boxes, pred_scores, pred_labels, cloud_msg.header)
-                
+
+                # Record postprocess end timestamp
+                postprocess_end_timestamp = time.time()
+
                 # Update visualization if enabled
                 if self.use_visualization and OPEN3D_FLAG:
                     V.update_scene(
@@ -205,12 +247,29 @@ class PCDetNode(Node):
                         ref_scores=pred_dicts[0]['pred_scores'],
                         ref_labels=pred_dicts[0]['pred_labels']
                     )
-                
+
         except Exception as e:
             self.get_logger().error(f'Error during inference: {str(e)}')
             self.processing_frame = False
+            return
 
         self.get_logger().info(f'Inference ran in {time.time() - stepTime:.2f} seconds')
+
+        # Publish performance metrics if enabled
+        if self.enable_perf_tracking and self.perf_pub is not None:
+            perf_msg = DetectionPerf()
+            perf_msg.header = cloud_msg.header
+            perf_msg.sequence_id = self.sequence_id
+            perf_msg.input_point_count = input_point_count
+            perf_msg.detection_count = detection_count
+            perf_msg.receive_timestamp = receive_timestamp
+            perf_msg.preprocess_end_timestamp = preprocess_end_timestamp
+            perf_msg.inference_end_timestamp = inference_end_timestamp
+            perf_msg.postprocess_end_timestamp = postprocess_end_timestamp
+            perf_msg.model_name = self.model_name
+            self.perf_pub.publish(perf_msg)
+            self.sequence_id += 1
+
         current_frame += 1
         self.get_logger().info(f'Frame {self.frame_count} processed in {time.time() - start_time:.2f} seconds')
         self.frame_count += 1
@@ -454,6 +513,11 @@ def parse_config():
                         help='enable Open3D visualization')
     parser.add_argument('--draw_origin', action='store_true',
                         help='draw origin in visualization')
+    # Performance tracking arguments
+    parser.add_argument('--enable_perf_tracking', action='store_true',
+                        help='enable performance tracking and publish metrics to /perf/detection')
+    parser.add_argument('--model_name', type=str, default='unknown',
+                        help='model name for performance tracking identification')
 
     args = parser.parse_args()
     cfg_from_yaml_file(args.cfg_file, cfg)
