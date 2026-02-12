@@ -1,0 +1,30 @@
+pointcloud_interpolation_node:
+  ros__parameters:
+    lidar:
+      max_range: 20.0
+      min_range: 1.5
+
+    range_image:
+      angular_resolution_x: 0.5   # OPTIMIZED: Changed from 0.25
+      angular_resolution_y: 0.5
+      max_angle_width: 360.0
+      max_angle_height: 180.0
+      min_angle_fov: -15.0
+      max_angle_fov: 15.0
+
+    interpolation:
+      method: "nearest"           # OPTIMIZED: Changed from "linear"
+      scale_factor_x: 1.0
+      scale_factor_y: 1.5
+      interpolation_max_var: 50.0
+      apply_variance_filter: false
+      rotation_angle_x: 0.0
+      extrapolation_value: "NaN"
+      sensor_translation: [-0.25, 0.0, 0.2]
+
+    topics:
+      lidar_topic: "velodyne_points"
+      interpolated_point_cloud_topic: "interpolated_point_cloud"
+
+    processing:
+      filter_pc: false  # CRITICAL: Must be false

@@ -36,6 +36,9 @@
 #include <mutex>
 #include <Eigen/Dense>
 
+// Performance tracking message
+#include <perf_msgs/msg/interpolation_perf.hpp>
+
 using namespace std::chrono_literals;
 using rcl_interfaces::msg::SetParametersResult;
 using namespace std::chrono;
@@ -114,6 +117,10 @@ private:
         // Topics
         this->declare_parameter<std::string>("topics.lidar_topic", "velodyne_points");
         this->declare_parameter<std::string>("topics.interpolated_point_cloud_topic", "interpolated_point_cloud");
+
+        // Performance tracking
+        this->declare_parameter<bool>("performance.enable_perf_tracking", false);
+        this->declare_parameter<std::string>("performance.config_name", "default");
     }
 
     /**
@@ -184,6 +191,10 @@ private:
         // Topics
         lidar_topic_ = this->get_parameter("topics.lidar_topic").as_string();
         interpolated_point_cloud_topic_ = this->get_parameter("topics.interpolated_point_cloud_topic").as_string();
+
+        // Performance tracking
+        enable_perf_tracking_ = this->get_parameter("performance.enable_perf_tracking").as_bool();
+        config_name_ = this->get_parameter("performance.config_name").as_string();
     }
 
     /**
@@ -198,6 +209,15 @@ private:
 
         RCLCPP_INFO(this->get_logger(), "Initialized PointCloud2 publisher for '%s'.",
                     interpolated_point_cloud_topic_.c_str());
+
+        // Performance tracking publisher
+        if (enable_perf_tracking_)
+        {
+            perf_pub_ = this->create_publisher<perf_msgs::msg::InterpolationPerf>(
+                "/perf/interpolation",
+                rclcpp::QoS(rclcpp::KeepLast(100)).reliable());
+            RCLCPP_INFO(this->get_logger(), "Performance tracking enabled. Publishing to '/perf/interpolation'.");
+        }
     }
 
     /**
@@ -228,6 +248,17 @@ private:
     }
 
     /**
+     * @brief Gets the current time as epoch seconds with microsecond precision.
+     * @return Current time as double (seconds since epoch).
+     */
+    double get_epoch_timestamp() const
+    {
+        auto now = std::chrono::system_clock::now();
+        auto duration = now.time_since_epoch();
+        return std::chrono::duration<double>(duration).count();
+    }
+
+    /**
      * @brief Callback function for LiDAR messages.
      *
      * Processes the incoming LiDAR point cloud, applies interpolation, and publishes the result.
@@ -237,7 +268,10 @@ private:
     void fusionCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr lidar_msg)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        
+
+        // Record receive timestamp for performance tracking
+        double receive_timestamp = get_epoch_timestamp();
+
         auto now = std::chrono::system_clock::now();
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
         auto t = std::chrono::system_clock::to_time_t(now);
@@ -297,8 +331,14 @@ private:
             //        Step 2: PointCloud Interpolation    /
             /*───────────────────────────────────────────*/
 
+            // Store input point count for performance tracking
+            size_t input_point_count = sor_filtered_cloud_->points.size();
+
             auto step = std::chrono::high_resolution_clock::now();
-            
+
+            // Record process start timestamp
+            double process_start_timestamp = get_epoch_timestamp();
+
             // Generate 3D interpolated PointCloud
             auto interpolated_dense_cloud = range_utils_->interpolatePointCloud(
                 sor_filtered_cloud_,    // The filtered point cloud to be interpolated
@@ -320,6 +360,9 @@ private:
                 max_ang_fov_            // Maximum angle for the field of view (degree)
             );
             
+            // Record process end timestamp
+            double process_end_timestamp = get_epoch_timestamp();
+
             auto finish   = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double, std::milli> fp_ms = finish-step;
             RCLCPP_DEBUG(this->get_logger(), "Interpolation done in %f milliseconds.", fp_ms);
@@ -330,7 +373,10 @@ private:
                 return;
             }
 
-            RCLCPP_DEBUG(this->get_logger(), "Interpolated dense point cloud has %zu points.", interpolated_dense_cloud->points.size());
+            // Store output point count for performance tracking
+            size_t output_point_count = interpolated_dense_cloud->points.size();
+
+            RCLCPP_DEBUG(this->get_logger(), "Interpolated dense point cloud has %zu points.", output_point_count);
 
             // Step 3: Publish interpolated point cloud
             start = std::chrono::high_resolution_clock::now();
@@ -338,10 +384,29 @@ private:
             pcl::toROSMsg(*interpolated_dense_cloud, fused_pcl_msg);
             fused_pcl_msg.header = lidar_msg->header;
             interpolated_point_cloud_pub_->publish(fused_pcl_msg);
-            
+
+            // Record publish timestamp
+            double publish_timestamp = get_epoch_timestamp();
+
             finish = std::chrono::high_resolution_clock::now();
             fp_ms = finish-step;
             RCLCPP_DEBUG(this->get_logger(), "Published interpolated point cloud in %f milliseconds.", fp_ms);
+
+            // Publish performance metrics if enabled
+            if (enable_perf_tracking_ && perf_pub_)
+            {
+                perf_msgs::msg::InterpolationPerf perf_msg;
+                perf_msg.header = lidar_msg->header;
+                perf_msg.sequence_id = sequence_id_++;
+                perf_msg.input_point_count = static_cast<uint32_t>(input_point_count);
+                perf_msg.output_point_count = static_cast<uint32_t>(output_point_count);
+                perf_msg.receive_timestamp = receive_timestamp;
+                perf_msg.process_start_timestamp = process_start_timestamp;
+                perf_msg.process_end_timestamp = process_end_timestamp;
+                perf_msg.publish_timestamp = publish_timestamp;
+                perf_msg.config_name = config_name_;
+                perf_pub_->publish(perf_msg);
+            }
         }
         catch (const std::exception &e)
         {
@@ -689,6 +754,11 @@ private:
     std::string lidar_topic_;
     std::string interpolated_point_cloud_topic_;
 
+    // Performance tracking
+    bool enable_perf_tracking_;
+    std::string config_name_;
+    uint32_t sequence_id_ = 0;
+
     std::chrono::high_resolution_clock::time_point node_start;
 
     // Parameters and utilities
@@ -696,6 +766,7 @@ private:
 
     // Publishers
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr interpolated_point_cloud_pub_;
+    rclcpp::Publisher<perf_msgs::msg::InterpolationPerf>::SharedPtr perf_pub_;
 
     // Subscribers
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_lidar_;

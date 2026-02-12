@@ -31,7 +31,7 @@ except ImportError:
         'scripts'
     )
     sys.path.insert(0, pointcloud_utils_scripts)
-    import bin_file_utils
+    import bin_file_uti
 
 try:
     import interpolation_core
