@@ -92,7 +92,7 @@ services:
       - ../datos/kitti/db_infos:/OpenPCDet/data/kitti/db_infos/:cached
       - ../datos/reduced-kitti/db_infos:/OpenPCDet/data/reduced-kitti/db_infos/:cached
       - ../datos/output:/OpenPCDet/output:cached
-      - ../datos/interpolated-kitti/:/OpenPCDet/data/interpolated-kitti:ro
+      - /media/cristobalmedina/Seagate Expansion Drive/interpolated-kitti/:/OpenPCDet/data/interpolated-kitti:ro
 
 
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -142,7 +142,7 @@ services:
       - ./data/config_files/interpolation/:/app/data/config_files/interpolation/:cached
       - ../datos/kitti/:/app/data/kitti:cached
       - ../datos/reduced-kitti/:/app/data/reduced-kitti:cached
-      - ../datos/interpolated-kitti/:/app/data/output/interpolated-kitti:cached
+      - /media/cristobalmedina/Seagate Expansion Drive/interpolated-kitti/:/app/data/output/interpolated-kitti:cached
 
       # - ./packages/dynamic_lidar_interpolation:/app/packages/dynamic_lidar_interpolation:cached
       # - ./packages/pointcloud_utils:/app/packages/pointcloud_utils:cached

@@ -1,0 +1,14 @@
+[package.build.backend]
+channels = [
+    "robostack-humble", 
+    "conda-forge", 
+    "https://prefix.dev/pixi-build-backends"
+    ]
+name = "pixi-build-ros"
+version = "*"
+
+[package.build.config]
+distro = "humble"
+
+[package.run-dependencies]
+ros-humble-pcl-ros = "*"
