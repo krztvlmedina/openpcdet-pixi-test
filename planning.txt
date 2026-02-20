@@ -34,3 +34,9 @@ PCLs a revisar:
 - 00183 algunos autos
 - 00185 varios autos
 - 00186 varios autos
+- 00189 varios peatones
+
+
+for i in $(seq -f "%06g" 4000 5000); do
+    sudo rm -f "${i}.bin"
+done

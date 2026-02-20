@@ -17,21 +17,6 @@
 #     - publishes /perf/detection
 #
 # This script runs on the HOST and orchestrates both containers via docker exec.
-#
-# Prerequisites:
-#   - Both containers must be running:  docker compose up -d
-#   - perf_msgs must be built in BOTH containers (see build steps below)
-#   - Interpolation package rebuilt with perf_msgs dependency in velodyne_ros2
-#
-# Usage:
-#   # Run full evaluation (all models, all configs):
-#   bash src/lidar/tools/perf_evaluation/run_realtime_eval.sh
-#
-#   # Run single model with specific config:
-#   bash src/lidar/tools/perf_evaluation/run_realtime_eval.sh --model parta2_anchor --config optimized
-#
-#   # Custom output directory and frame count:
-#   bash src/lidar/tools/perf_evaluation/run_realtime_eval.sh --output-dir /data/my_results --max-frames 100
 
 set -euo pipefail
 
@@ -40,27 +25,24 @@ CONTAINER_VELODYNE="${CONTAINER_VELODYNE:-velodyne_ros2}"
 CONTAINER_OPENPCDET="${CONTAINER_OPENPCDET:-velodyne_openpcdet}"
 
 # ─── Paths inside each container ───────────────────────────────────────────
-# velodyne_ros2 container paths
-VEL_BIN_DIR="/app/data/kitti/training/velodyne"
-VEL_INTERP_CONFIG_DIR="/app/packages/dynamic_lidar_interpolation/config"
+VEL_BIN_DIR="/app/data/ros2_bags"
+VEL_INTERP_CONFIG_DIR="/app/data/config_files/interpolation"
 
-# openpcdet container paths
 OPC_ROOT="/OpenPCDet"
 OPC_TOOLS="${OPC_ROOT}/src/lidar/tools"
 OPC_MODELS_DIR="${OPC_ROOT}/data/pretrained-models"
 
 # ─── Host-side defaults ────────────────────────────────────────────────────
-# Results are written inside the openpcdet container, which has ./data mounted
 OUTPUT_BASE="/OpenPCDet/output/perf_results"
 WARMUP_FRAMES=10
 MAX_FRAMES=500
 PUBLISH_RATE=10.0
 SINGLE_MODEL=""
 SINGLE_CONFIG=""
-SETTLE_TIME=5       # Seconds to wait between runs for GPU/DDS cooldown
+SETTLE_TIME=5
 POINTCLOUD_TOPIC="interpolated_point_cloud"
 
-# ─── Model definitions (matches eval_all.sh) ───────────────────────────────
+# ─── Model definitions ─────────────────────────────────────────────────────
 declare -A MODELS
 MODELS[parta2_anchor]="parta2_anchor.yaml PartA2_7940.pth"
 MODELS[pointpillar]="pointpillar.yaml pointpillar_7728.pth"
@@ -69,7 +51,6 @@ MODELS[pv_rcnn]="pv_rcnn.yaml pv_rcnn_8369.pth"
 MODELS[second]="second.yaml second_7862.pth"
 MODELS[second_iou]="second_iou.yaml second_iou7909.pth"
 
-# Interpolation configs to test (paths inside velodyne_ros2 container)
 declare -A INTERP_CONFIGS
 INTERP_CONFIGS[standard]="${VEL_INTERP_CONFIG_DIR}/interpolation_config.yaml"
 INTERP_CONFIGS[optimized]="${VEL_INTERP_CONFIG_DIR}/interpolation_config_optimized.yaml"
@@ -87,20 +68,6 @@ while [[ $# -gt 0 ]]; do
         --settle)      SETTLE_TIME="$2"; shift 2 ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
-            echo ""
-            echo "Options:"
-            echo "  --model NAME       Run only this model (e.g., parta2_anchor)"
-            echo "  --config NAME      Run only this config (standard or optimized)"
-            echo "  --bin-dir DIR      .bin files directory (inside velodyne_ros2 container)"
-            echo "  --output-dir DIR   Output directory (inside openpcdet container)"
-            echo "  --warmup N         Warmup frames (default: 10)"
-            echo "  --max-frames N     Max frames to record (default: 500, 0=unlimited)"
-            echo "  --rate HZ          Publish rate (default: 10.0)"
-            echo "  --settle SEC       Settle time between runs (default: 5)"
-            echo ""
-            echo "Container names (override with env vars):"
-            echo "  CONTAINER_VELODYNE   (default: velodyne_ros2)"
-            echo "  CONTAINER_OPENPCDET  (default: velodyne_openpcdet)"
             exit 0
             ;;
         *) echo "Unknown option: $1"; exit 1 ;;
@@ -134,49 +101,51 @@ for ctr in "${CONTAINER_VELODYNE}" "${CONTAINER_OPENPCDET}"; do
 done
 echo "Both containers are running."
 
-# Create output directory inside openpcdet container
 docker exec "${CONTAINER_OPENPCDET}" mkdir -p "${RUN_DIR}"
 
-# ─── Helper: run command in a container in background ──────────────────────
-# Stores the docker exec PID so we can kill it later.
-# Usage: exec_bg <container> <var_name_for_pid> <cmd...>
-exec_bg() {
-    local container="$1"
-    local pid_var="$2"
-    shift 2
-    docker exec -d "${container}" bash -c "$*"
-    # Get the PID of the process inside the container
-    # We use a small delay + pgrep to find it
-    sleep 0.5
-    eval "${pid_var}=''"
-}
+# ─── Environment-aware docker exec helpers ─────────────────────────────────
 
-# ─── Helper: run command in a container, detached, returning host docker PID ──
-# Usage: dexec_bg <container> <cmd...>
-# Prints the host-side PID of the docker exec process to stdout.
 dexec_bg() {
     local container="$1"
     shift
-    docker exec "${container}" bash -c "$*" &
+
+    if [ "$container" = "$CONTAINER_VELODYNE" ]; then
+        docker exec "$container" bash -c "pixi shell -c \"$*\"" &
+    else
+        docker exec "$container" bash -c "source /opt/ros2_humble/install/setup.bash && $*" &
+    fi
+
     echo $!
 }
 
-# ─── Helper: kill a process inside a container by command pattern ──────────
-# Usage: kill_in_container <container> <grep_pattern>
 kill_in_container() {
     local container="$1"
     local pattern="$2"
-    docker exec "${container}" bash -c "pkill -f '${pattern}' 2>/dev/null || true"
+
+    if [ "$container" = "$CONTAINER_VELODYNE" ]; then
+        docker exec "$container" bash -c "pixi shell -c \"pkill -f '${pattern}' 2>/dev/null || true\""
+    else
+        docker exec "$container" bash -c "source /opt/ros2_humble/install/setup.bash && pkill -f '${pattern}' 2>/dev/null || true"
+    fi
 }
 
-# ─── Helper: wait for a ROS2 topic via either container ────────────────────
 wait_for_topic() {
     local container="$1"
     local topic="$2"
     local timeout="${3:-30}"
     local elapsed=0
+
     echo "  Waiting for topic ${topic} in ${container} (timeout: ${timeout}s)..."
-    while ! docker exec "${container}" bash -c "ros2 topic list 2>/dev/null" | grep -q "${topic}"; do
+
+    while true; do
+        if [ "$container" = "$CONTAINER_VELODYNE" ]; then
+            docker exec "$container" bash -c \
+                "pixi shell -c \"ros2 topic list 2>/dev/null\"" | grep -q "${topic}" && break
+        else
+            docker exec "$container" bash -c \
+                "source /opt/ros2_humble/install/setup.bash && ros2 topic list 2>/dev/null" | grep -q "${topic}" && break
+        fi
+
         sleep 1
         elapsed=$((elapsed + 1))
         if [ "$elapsed" -ge "$timeout" ]; then
@@ -184,6 +153,7 @@ wait_for_topic() {
             return 1
         fi
     done
+
     echo "  Topic ${topic} is available."
     return 0
 }
@@ -193,7 +163,6 @@ HOST_PIDS=()
 cleanup() {
     echo ""
     echo "Cleaning up..."
-    # Kill host-side docker exec processes
     for pid in "${HOST_PIDS[@]}"; do
         if kill -0 "$pid" 2>/dev/null; then
             kill "$pid" 2>/dev/null || true
@@ -201,7 +170,7 @@ cleanup() {
         fi
     done
     HOST_PIDS=()
-    # Kill known processes inside containers
+
     kill_in_container "${CONTAINER_VELODYNE}" "pointcloud_interpolation_node"
     kill_in_container "${CONTAINER_VELODYNE}" "bin_publisher_node"
     kill_in_container "${CONTAINER_OPENPCDET}" "ros2_node.py"
@@ -212,10 +181,10 @@ trap cleanup EXIT INT TERM
 # ─── Run a single evaluation ───────────────────────────────────────────────
 run_evaluation() {
     local config_name="$1"
-    local config_file="$2"   # Path inside velodyne_ros2
+    local config_file="$2"
     local model_name="$3"
-    local cfg_file="$4"      # Relative to OPC_ROOT
-    local ckpt="$5"          # Relative to OPC_ROOT
+    local cfg_file="$4"
+    local ckpt="$5"
     local run_output_dir="${RUN_DIR}/${config_name}/${model_name}"
 
     docker exec "${CONTAINER_OPENPCDET}" mkdir -p "${run_output_dir}"
@@ -226,7 +195,6 @@ run_evaluation() {
     echo "  Output: ${run_output_dir}"
     echo "────────────────────────────────────────────────────────────"
 
-    # ── 1. Start perf_collector_node in openpcdet container ─────────────
     echo "  [openpcdet] Starting perf_collector_node..."
     local collector_pid
     collector_pid=$(dexec_bg "${CONTAINER_OPENPCDET}" \
@@ -240,7 +208,6 @@ run_evaluation() {
     HOST_PIDS+=("${collector_pid}")
     sleep 2
 
-    # ── 2. Start pcdet_node (detection) in openpcdet container ──────────
     echo "  [openpcdet] Starting pcdet_node (model: ${model_name})..."
     local detect_pid
     detect_pid=$(dexec_bg "${CONTAINER_OPENPCDET}" \
@@ -251,9 +218,8 @@ run_evaluation() {
             --enable_perf_tracking \
             --model_name ${model_name}")
     HOST_PIDS+=("${detect_pid}")
-    sleep 8  # Wait for model loading + GPU warmup
+    sleep 8
 
-    # ── 3. Start interpolation_node in velodyne_ros2 container ──────────
     echo "  [velodyne_ros] Starting interpolation node..."
     local interp_pid
     interp_pid=$(dexec_bg "${CONTAINER_VELODYNE}" \
@@ -265,14 +231,10 @@ run_evaluation() {
     HOST_PIDS+=("${interp_pid}")
     sleep 2
 
-    # ── 4. Wait for topics to be ready (check from openpcdet since it
-    #       needs to see topics from both containers via DDS) ────────────
     wait_for_topic "${CONTAINER_OPENPCDET}" "${POINTCLOUD_TOPIC}" 30 || true
     wait_for_topic "${CONTAINER_OPENPCDET}" "/perf/interpolation" 15 || true
     wait_for_topic "${CONTAINER_OPENPCDET}" "/perf/detection" 15 || true
 
-    # ── 5. Start bin_publisher in velodyne_ros2 container ───────────────
-    #       (this triggers the pipeline — started last so nothing is missed)
     echo "  [velodyne_ros] Starting bin_publisher (rate: ${PUBLISH_RATE} Hz)..."
     local publisher_pid
     publisher_pid=$(dexec_bg "${CONTAINER_VELODYNE}" \
@@ -285,8 +247,8 @@ run_evaluation() {
             -p topic:=velodyne_points")
     HOST_PIDS+=("${publisher_pid}")
 
-    # ── 6. Wait for collector to finish ─────────────────────────────────
     echo "  Evaluation running... waiting for collector to finish."
+
     if [ "${MAX_FRAMES}" -gt 0 ]; then
         local timeout_sec=$(( (WARMUP_FRAMES + MAX_FRAMES) * 3 + 60 ))
         local waited=0
@@ -299,44 +261,34 @@ run_evaluation() {
             fi
         done
     else
-        # Unlimited: wait for publisher to finish, then give extra time
         wait "${publisher_pid}" 2>/dev/null || true
         echo "  Publisher finished. Waiting 10s for remaining frames..."
         sleep 10
     fi
 
-    # ── 7. Stop all processes for this run ──────────────────────────────
     echo "  Stopping nodes..."
 
-    # Kill host-side docker exec processes
     for pid in "${publisher_pid}" "${interp_pid}" "${detect_pid}" "${collector_pid}"; do
-        if kill -0 "$pid" 2>/dev/null; then
-            kill "$pid" 2>/dev/null || true
-            wait "$pid" 2>/dev/null || true
-        fi
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
     done
 
-    # Also kill inside containers (docker exec -d processes may outlive the host PID)
     kill_in_container "${CONTAINER_VELODYNE}" "bin_publisher_node"
     kill_in_container "${CONTAINER_VELODYNE}" "pointcloud_interpolation_node"
     kill_in_container "${CONTAINER_OPENPCDET}" "ros2_node.py"
     kill_in_container "${CONTAINER_OPENPCDET}" "perf_collector_node.py"
 
-    # Reset host PID tracking
     HOST_PIDS=()
 
     echo "  Run complete: ${config_name}/${model_name}"
-
-    # Settle time between runs for GPU/DDS cooldown
     echo "  Cooling down for ${SETTLE_TIME}s..."
     sleep "${SETTLE_TIME}"
 }
 
-# ─── Main evaluation loop ─────────────────────────────────────────────────
+# ─── Main loop ─────────────────────────────────────────────────────────────
 total_runs=0
 completed_runs=0
 
-# Count total runs
 for CONFIG_NAME in "${!INTERP_CONFIGS[@]}"; do
     if [[ -n "${SINGLE_CONFIG}" && "${CONFIG_NAME}" != "${SINGLE_CONFIG}" ]]; then
         continue
@@ -391,9 +343,10 @@ echo "  All evaluations complete!"
 echo "  Results stored in: ${RUN_DIR} (inside ${CONTAINER_OPENPCDET})"
 echo "================================================================"
 
-# Run aggregation inside the openpcdet container
 echo ""
 echo "Running results aggregation..."
 docker exec "${CONTAINER_OPENPCDET}" bash -c \
-    "cd ${OPC_ROOT} && python3 ${OPC_TOOLS}/perf_evaluation/aggregate_realtime_results.py ${RUN_DIR}" \
+    "source /opt/ros2_humble/install/setup.bash && \
+     cd ${OPC_ROOT} && \
+     python3 ${OPC_TOOLS}/perf_evaluation/aggregate_realtime_results.py ${RUN_DIR}" \
     || echo "WARNING: Aggregation failed. Run manually inside the container."
