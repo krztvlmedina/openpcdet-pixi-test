@@ -7,7 +7,8 @@
 # Architecture (two Docker containers, both network_mode: host + FastDDS UDPv4):
 #
 #   velodyne_ros2 container:
-#     - bin_publisher_node    → publishes KITTI .bin as velodyne_points
+#     - bin_publisher_node    → publishes KITTI .bin as velodyne_points  [DATA_TYPE=bin]
+#       OR ros2 bag play      → replays a recorded .db3 bag              [DATA_TYPE=bag]
 #     - interpolation_node    → subscribes velodyne_points, publishes interpolated_point_cloud
 #     - publishes /perf/interpolation
 #
@@ -25,8 +26,10 @@ CONTAINER_VELODYNE="${CONTAINER_VELODYNE:-velodyne_ros2}"
 CONTAINER_OPENPCDET="${CONTAINER_OPENPCDET:-velodyne_openpcdet}"
 
 # ─── Paths inside each container ───────────────────────────────────────────
-VEL_BIN_DIR="/app/data/ros2_bags"
-VEL_INTERP_CONFIG_DIR="/app/data/config_files/interpolation/final"
+# VEL_DATA_PATH: directory of KITTI .bin files  (DATA_TYPE=bin)
+#             OR path to a ROS2 bag directory    (DATA_TYPE=bag)
+VEL_DATA_PATH="/app/data/ros2_bags"
+VEL_INTERP_CONFIG_DIR="/app/data/config_files/interpolation"
 
 OPC_ROOT="/OpenPCDet"
 OPC_TOOLS="${OPC_ROOT}/src/lidar/tools"
@@ -41,6 +44,12 @@ SINGLE_MODEL=""
 SINGLE_CONFIG=""
 SETTLE_TIME=5
 POINTCLOUD_TOPIC="interpolated_point_cloud"
+# Data source selection:
+#   auto → inspects VEL_DATA_PATH inside the container and picks bin or bag
+#   bin  → forces bin_publisher_node (KITTI .bin files)
+#   bag  → forces ros2 bag play (.db3 bag)
+DATA_TYPE="auto"
+VEL_BAG_TOPIC="velodyne_points"   # topic to replay when DATA_TYPE=bag
 
 # ─── Model definitions ─────────────────────────────────────────────────────
 declare -A MODELS
@@ -60,14 +69,22 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --model)       SINGLE_MODEL="$2"; shift 2 ;;
         --config)      SINGLE_CONFIG="$2"; shift 2 ;;
-        --bin-dir)     VEL_BIN_DIR="$2"; shift 2 ;;
+        --data-path)   VEL_DATA_PATH="$2"; shift 2 ;;
+        --bin-dir)     VEL_DATA_PATH="$2"; shift 2 ;;   # backwards compat alias
         --output-dir)  OUTPUT_BASE="$2"; shift 2 ;;
         --warmup)      WARMUP_FRAMES="$2"; shift 2 ;;
         --max-frames)  MAX_FRAMES="$2"; shift 2 ;;
         --rate)        PUBLISH_RATE="$2"; shift 2 ;;
         --settle)      SETTLE_TIME="$2"; shift 2 ;;
+        --data-type)   DATA_TYPE="$2"; shift 2 ;;       # auto | bin | bag
+        --bag-topic)   VEL_BAG_TOPIC="$2"; shift 2 ;;  # velodyne topic inside the bag
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
+            echo "  --data-path PATH   Directory of .bin files or ROS2 bag directory (default: ${VEL_DATA_PATH})"
+            echo "  --data-type TYPE   auto | bin | bag  (default: auto)"
+            echo "  --bag-topic TOPIC  Topic to replay when using bag mode (default: ${VEL_BAG_TOPIC})"
+            echo "  --bin-dir PATH     Alias for --data-path (backwards compat)"
+            echo "  --rate HZ          Publish rate for bin mode; ignored for bag mode (default: ${PUBLISH_RATE})"
             exit 0
             ;;
         *) echo "Unknown option: $1"; exit 1 ;;
@@ -82,10 +99,11 @@ echo "  Real-Time Performance Evaluation Pipeline"
 echo "================================================================"
 echo "  Timestamp:         ${TIMESTAMP}"
 echo "  Output (openpcdet):${RUN_DIR}"
-echo "  Bin dir (vel_ros): ${VEL_BIN_DIR}"
+echo "  Data path (vel):   ${VEL_DATA_PATH}"
+echo "  Data type:         ${DATA_TYPE}"
 echo "  Warmup:            ${WARMUP_FRAMES} frames"
 echo "  Max frames:        ${MAX_FRAMES}"
-echo "  Publish rate:      ${PUBLISH_RATE} Hz"
+echo "  Publish rate:      ${PUBLISH_RATE} Hz  (bin mode only)"
 echo "  Container (vel):   ${CONTAINER_VELODYNE}"
 echo "  Container (opc):   ${CONTAINER_OPENPCDET}"
 echo "================================================================"
@@ -100,6 +118,48 @@ for ctr in "${CONTAINER_VELODYNE}" "${CONTAINER_OPENPCDET}"; do
     fi
 done
 echo "Both containers are running."
+
+# ─── Data-type detection ──────────────────────────────────────────────────
+# Runs inside the velodyne container since VEL_DATA_PATH is a container path.
+detect_data_type() {
+    local path="$1"
+
+    # A ROS2 bag directory always contains a metadata.yaml
+    if docker exec "${CONTAINER_VELODYNE}" bash -c \
+        "[ -f '${path}/metadata.yaml' ]" 2>/dev/null; then
+        echo "bag"
+        return
+    fi
+
+    # A bare .db3 file (uncommon but valid)
+    if docker exec "${CONTAINER_VELODYNE}" bash -c \
+        "ls '${path}'/*.db3 2>/dev/null | grep -q ." 2>/dev/null; then
+        echo "bag"
+        return
+    fi
+
+    # Directory of KITTI .bin files
+    if docker exec "${CONTAINER_VELODYNE}" bash -c \
+        "ls '${path}'/*.bin 2>/dev/null | grep -q ." 2>/dev/null; then
+        echo "bin"
+        return
+    fi
+
+    echo "unknown"
+}
+
+# ─── Resolve data type ────────────────────────────────────────────────────
+if [ "${DATA_TYPE}" = "auto" ]; then
+    echo "Auto-detecting data type from ${VEL_DATA_PATH} ..."
+    DATA_TYPE=$(detect_data_type "${VEL_DATA_PATH}")
+    echo "  → detected: ${DATA_TYPE}"
+fi
+
+if [ "${DATA_TYPE}" = "unknown" ]; then
+    echo "ERROR: No .bin files or ROS2 bag found at '${VEL_DATA_PATH}' (in ${CONTAINER_VELODYNE})."
+    echo "       Use --data-type bin|bag to force, or fix --data-path."
+    exit 1
+fi
 
 docker exec "${CONTAINER_OPENPCDET}" mkdir -p "${RUN_DIR}"
 
@@ -173,6 +233,7 @@ cleanup() {
 
     kill_in_container "${CONTAINER_VELODYNE}" "pointcloud_interpolation_node"
     kill_in_container "${CONTAINER_VELODYNE}" "bin_publisher_node"
+    kill_in_container "${CONTAINER_VELODYNE}" "ros2 bag play"
     kill_in_container "${CONTAINER_OPENPCDET}" "ros2_node.py"
     kill_in_container "${CONTAINER_OPENPCDET}" "perf_collector_node.py"
 }
@@ -238,16 +299,22 @@ run_evaluation() {
     # is running.
     wait_for_topic "${CONTAINER_OPENPCDET}" "${POINTCLOUD_TOPIC}" 30 || true
 
-    echo "  [velodyne_ros] Starting bin_publisher (rate: ${PUBLISH_RATE} Hz)..."
     local publisher_pid
-    publisher_pid=$(dexec_bg "${CONTAINER_VELODYNE}" \
-        "ros2 run pointcloud_utils bin_publisher_node \
-            --ros-args \
-            -p bin_directory:=${VEL_BIN_DIR} \
-            -p publish_rate:=${PUBLISH_RATE} \
-            -p loop:=false \
-            -p frame_id:=velodyne \
-            -p topic:=velodyne_points")
+    if [ "${DATA_TYPE}" = "bin" ]; then
+        echo "  [velodyne_ros] Starting bin_publisher_node (rate: ${PUBLISH_RATE} Hz)..."
+        publisher_pid=$(dexec_bg "${CONTAINER_VELODYNE}" \
+            "ros2 run pointcloud_utils bin_publisher_node \
+                --ros-args \
+                -p bin_directory:=${VEL_DATA_PATH} \
+                -p publish_rate:=${PUBLISH_RATE} \
+                -p loop:=false \
+                -p frame_id:=velodyne \
+                -p topic:=velodyne_points")
+    else
+        echo "  [velodyne_ros] Starting ros2 bag play (topic: ${VEL_BAG_TOPIC})..."
+        publisher_pid=$(dexec_bg "${CONTAINER_VELODYNE}" \
+            "ros2 bag play ${VEL_DATA_PATH} --topics ${VEL_BAG_TOPIC}")
+    fi
     HOST_PIDS+=("${publisher_pid}")
 
     echo "  Evaluation running... waiting for collector to finish."
@@ -280,6 +347,7 @@ run_evaluation() {
     done
 
     kill_in_container "${CONTAINER_VELODYNE}" "bin_publisher_node"
+    kill_in_container "${CONTAINER_VELODYNE}" "ros2 bag play"
     kill_in_container "${CONTAINER_VELODYNE}" "pointcloud_interpolation_node"
     kill_in_container "${CONTAINER_OPENPCDET}" "ros2_node.py"
     kill_in_container "${CONTAINER_OPENPCDET}" "perf_collector_node.py"
