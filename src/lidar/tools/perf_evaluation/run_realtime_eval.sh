@@ -194,7 +194,7 @@ dexec_bg() {
     shift
 
     if [ "$container" = "$CONTAINER_VELODYNE" ]; then
-        docker exec "$container" bash -c "pixi shell -c \"$*\"" &
+        docker exec "$container" bash -c "pixi run \"$*\"" &
     else
         docker exec "$container" bash -c "source /opt/ros2_humble/install/setup.bash && $*" &
     fi
@@ -207,7 +207,7 @@ kill_in_container() {
     local pattern="$2"
 
     if [ "$container" = "$CONTAINER_VELODYNE" ]; then
-        docker exec "$container" bash -c "pixi shell -c \"pkill -f '${pattern}' 2>/dev/null || true\""
+        docker exec "$container" bash -c "pixi run \"pkill -f '${pattern}' 2>/dev/null || true\""
     else
         docker exec "$container" bash -c "source /opt/ros2_humble/install/setup.bash && pkill -f '${pattern}' 2>/dev/null || true"
     fi
@@ -224,7 +224,7 @@ wait_for_topic() {
     while true; do
         if [ "$container" = "$CONTAINER_VELODYNE" ]; then
             docker exec "$container" bash -c \
-                "pixi shell -c \"ros2 topic list 2>/dev/null\"" | grep -q "${topic}" && break
+                "pixi run \"ros2 topic list 2>/dev/null\"" | grep -q "${topic}" && break
         else
             docker exec "$container" bash -c \
                 "source /opt/ros2_humble/install/setup.bash && ros2 topic list 2>/dev/null" | grep -q "${topic}" && break
