@@ -3,6 +3,7 @@
 !./pixi/*
 !.pixi/config.toml
 data/*
+!data/interpolation/config_files/*
 src/openpcdet/*
 src/ros2_numpy/*
 src/pcdet_ros2/*
