@@ -29,7 +29,7 @@ CONTAINER_OPENPCDET="${CONTAINER_OPENPCDET:-velodyne_openpcdet}"
 # VEL_DATA_PATH: directory of KITTI .bin files  (DATA_TYPE=bin)
 #             OR path to a ROS2 bag directory    (DATA_TYPE=bag)
 VEL_DATA_PATH="/app/data/ros2_bags"
-VEL_INTERP_CONFIG_DIR="/app/data/config_files/interpolation"
+VEL_INTERP_CONFIG_DIR="/app/data/config_files/interpolation/final"
 
 OPC_ROOT="/OpenPCDet"
 OPC_TOOLS="${OPC_ROOT}/src/lidar/tools"
@@ -60,9 +60,7 @@ MODELS[pv_rcnn]="pv_rcnn.yaml pv_rcnn_8369.pth"
 MODELS[second]="second.yaml second_7862.pth"
 MODELS[second_iou]="second_iou.yaml second_iou7909.pth"
 
-declare -A INTERP_CONFIGS
-INTERP_CONFIGS[standard]="${VEL_INTERP_CONFIG_DIR}/interpolation_config.yaml"
-INTERP_CONFIGS[optimized]="${VEL_INTERP_CONFIG_DIR}/interpolation_config_optimized.yaml"
+declare -A INTERP_CONFIGS   # populated after container check (see below)
 
 # ─── Parse CLI arguments ───────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -160,6 +158,27 @@ if [ "${DATA_TYPE}" = "unknown" ]; then
     echo "       Use --data-type bin|bag to force, or fix --data-path."
     exit 1
 fi
+
+# ─── Discover interpolation configs ───────────────────────────────────────
+# Read all .yaml files from VEL_INTERP_CONFIG_DIR inside the velodyne container
+# so the set of configs matches exactly what was used for offline evaluation.
+while IFS= read -r cfg_file; do
+    cfg_name=$(basename "${cfg_file}" .yaml)
+    INTERP_CONFIGS["${cfg_name}"]="${cfg_file}"
+done < <(docker exec "${CONTAINER_VELODYNE}" bash -c \
+    "ls '${VEL_INTERP_CONFIG_DIR}'/*.yaml 2>/dev/null | sort")
+
+if [ ${#INTERP_CONFIGS[@]} -eq 0 ]; then
+    echo "ERROR: No .yaml configs found in '${VEL_INTERP_CONFIG_DIR}' (in ${CONTAINER_VELODYNE})."
+    echo "       Populate data/config_files/interpolation/final/ on the host first."
+    exit 1
+fi
+
+echo "Found ${#INTERP_CONFIGS[@]} interpolation configs:"
+for cfg_name in $(printf '%s\n' "${!INTERP_CONFIGS[@]}" | sort); do
+    echo "  ${cfg_name}"
+done
+echo ""
 
 docker exec "${CONTAINER_OPENPCDET}" mkdir -p "${RUN_DIR}"
 

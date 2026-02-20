@@ -1,0 +1,25 @@
+# Real-Time Performance Evaluation Configuration
+# Used by perf_eval launch files and orchestration script
+
+evaluation:
+  warmup_frames: 10       # Frames to skip before recording metrics
+  max_frames: 500         # Maximum frames to record (0 for unlimited)
+  output_dir: "/app/data/perf_results"
+  headless: true          # Set false for Foxglove visualization
+
+input:
+  type: "bin"             # "bin" for KITTI .bin files, "rosbag" for ROS2 bags
+  bin_directory: "/app/data/kitti/training/velodyne"
+  rosbag_path: ""         # Used if type is "rosbag"
+  publish_rate: 10.0      # Hz
+  loop: false             # Do not loop for evaluation
+  frame_id: "velodyne"
+
+interpolation:
+  config_file: "interpolation_config_optimized.yaml"
+
+detection:
+  model: "parta2_anchor"
+  cfg_file: "src/lidar/tools/cfgs/kitti_models/interpolated/parta2_anchor.yaml"
+  checkpoint: "data/pretrained-models/PartA2_7940.pth"
+  pointcloud_topic: "interpolated_point_cloud"
