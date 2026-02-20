@@ -26,7 +26,7 @@ CONTAINER_OPENPCDET="${CONTAINER_OPENPCDET:-velodyne_openpcdet}"
 
 # ─── Paths inside each container ───────────────────────────────────────────
 VEL_BIN_DIR="/app/data/ros2_bags"
-VEL_INTERP_CONFIG_DIR="/app/data/config_files/interpolation"
+VEL_INTERP_CONFIG_DIR="/app/data/config_files/interpolation/final"
 
 OPC_ROOT="/OpenPCDet"
 OPC_TOOLS="${OPC_ROOT}/src/lidar/tools"
