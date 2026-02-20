@@ -231,9 +231,12 @@ run_evaluation() {
     HOST_PIDS+=("${interp_pid}")
     sleep 2
 
+    # Wait until the interpolation node has registered its output topic, which
+    # confirms it started successfully and is ready to receive velodyne_points.
+    # /perf/interpolation and /perf/detection are data-driven — they only appear
+    # once frames flow through the pipeline, so we check them after the publisher
+    # is running.
     wait_for_topic "${CONTAINER_OPENPCDET}" "${POINTCLOUD_TOPIC}" 30 || true
-    wait_for_topic "${CONTAINER_OPENPCDET}" "/perf/interpolation" 15 || true
-    wait_for_topic "${CONTAINER_OPENPCDET}" "/perf/detection" 15 || true
 
     echo "  [velodyne_ros] Starting bin_publisher (rate: ${PUBLISH_RATE} Hz)..."
     local publisher_pid
@@ -250,7 +253,10 @@ run_evaluation() {
     echo "  Evaluation running... waiting for collector to finish."
 
     if [ "${MAX_FRAMES}" -gt 0 ]; then
-        local timeout_sec=$(( (WARMUP_FRAMES + MAX_FRAMES) * 3 + 60 ))
+        # Timeout: allow (warmup+max) frames at the given publish rate, plus 120 s buffer.
+        # Uses awk for float division since PUBLISH_RATE may be a decimal.
+        local timeout_sec
+        timeout_sec=$(awk "BEGIN{printf \"%d\", (${WARMUP_FRAMES}+${MAX_FRAMES})/${PUBLISH_RATE}+120}")
         local waited=0
         while kill -0 "${collector_pid}" 2>/dev/null; do
             sleep 1
