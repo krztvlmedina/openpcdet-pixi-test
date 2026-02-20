@@ -28,7 +28,7 @@ CONTAINER_OPENPCDET="${CONTAINER_OPENPCDET:-velodyne_openpcdet}"
 # ─── Paths inside each container ───────────────────────────────────────────
 # VEL_DATA_PATH: directory of KITTI .bin files  (DATA_TYPE=bin)
 #             OR path to a ROS2 bag directory    (DATA_TYPE=bag)
-VEL_DATA_PATH="/app/data/ros2_bags"
+VEL_DATA_PATH="/app/data/ros2_bags/converted_bags"
 VEL_INTERP_CONFIG_DIR="/app/data/config_files/interpolation/final"
 
 OPC_ROOT="/OpenPCDet"
@@ -184,7 +184,12 @@ docker exec "${CONTAINER_OPENPCDET}" mkdir -p "${RUN_DIR}"
 
 # ─── Environment-aware docker exec helpers ─────────────────────────────────
 
+# PID of the last process started by dexec_bg (read after every call)
+DEXEC_PID=""
+
 dexec_bg() {
+    # Called directly — never via $() — so docker exec runs in the parent
+    # shell and $! is immediately available without a subshell pipe.
     local container="$1"
     shift
 
@@ -194,7 +199,7 @@ dexec_bg() {
         docker exec "$container" bash -c "source /opt/ros2_humble/install/setup.bash && $*" &
     fi
 
-    echo $!
+    DEXEC_PID=$!
 }
 
 kill_in_container() {
@@ -276,38 +281,38 @@ run_evaluation() {
     echo "────────────────────────────────────────────────────────────"
 
     echo "  [openpcdet] Starting perf_collector_node..."
-    local collector_pid
-    collector_pid=$(dexec_bg "${CONTAINER_OPENPCDET}" \
+    dexec_bg "${CONTAINER_OPENPCDET}" \
         "cd ${OPC_ROOT} && python3 ${OPC_TOOLS}/perf_collector_node.py \
             --ros-args \
             -p output_dir:=${run_output_dir} \
             -p config_name:=${config_name} \
             -p model_name:=${model_name} \
             -p warmup_frames:=${WARMUP_FRAMES} \
-            -p max_frames:=${MAX_FRAMES}")
+            -p max_frames:=${MAX_FRAMES}"
+    local collector_pid=${DEXEC_PID}
     HOST_PIDS+=("${collector_pid}")
     sleep 2
 
     echo "  [openpcdet] Starting pcdet_node (model: ${model_name})..."
-    local detect_pid
-    detect_pid=$(dexec_bg "${CONTAINER_OPENPCDET}" \
+    dexec_bg "${CONTAINER_OPENPCDET}" \
         "cd ${OPC_ROOT} && python3 ${OPC_TOOLS}/ros2_node.py \
             --cfg_file ${cfg_file} \
             --ckpt ${ckpt} \
             --pointcloud_topic ${POINTCLOUD_TOPIC} \
             --enable_perf_tracking \
-            --model_name ${model_name}")
+            --model_name ${model_name}"
+    local detect_pid=${DEXEC_PID}
     HOST_PIDS+=("${detect_pid}")
     sleep 8
 
     echo "  [velodyne_ros] Starting interpolation node..."
-    local interp_pid
-    interp_pid=$(dexec_bg "${CONTAINER_VELODYNE}" \
+    dexec_bg "${CONTAINER_VELODYNE}" \
         "ros2 run dynamic_lidar_interpolation pointcloud_interpolation_node \
             --ros-args \
             --params-file ${config_file} \
             -p performance.enable_perf_tracking:=true \
-            -p performance.config_name:=${config_name}")
+            -p performance.config_name:=${config_name}"
+    local interp_pid=${DEXEC_PID}
     HOST_PIDS+=("${interp_pid}")
     sleep 2
 
@@ -318,22 +323,22 @@ run_evaluation() {
     # is running.
     wait_for_topic "${CONTAINER_OPENPCDET}" "${POINTCLOUD_TOPIC}" 30 || true
 
-    local publisher_pid
     if [ "${DATA_TYPE}" = "bin" ]; then
         echo "  [velodyne_ros] Starting bin_publisher_node (rate: ${PUBLISH_RATE} Hz)..."
-        publisher_pid=$(dexec_bg "${CONTAINER_VELODYNE}" \
+        dexec_bg "${CONTAINER_VELODYNE}" \
             "ros2 run pointcloud_utils bin_publisher_node \
                 --ros-args \
                 -p bin_directory:=${VEL_DATA_PATH} \
                 -p publish_rate:=${PUBLISH_RATE} \
                 -p loop:=false \
                 -p frame_id:=velodyne \
-                -p topic:=velodyne_points")
+                -p topic:=velodyne_points"
     else
         echo "  [velodyne_ros] Starting ros2 bag play (topic: ${VEL_BAG_TOPIC})..."
-        publisher_pid=$(dexec_bg "${CONTAINER_VELODYNE}" \
-            "ros2 bag play ${VEL_DATA_PATH} --topics ${VEL_BAG_TOPIC}")
+        dexec_bg "${CONTAINER_VELODYNE}" \
+            "ros2 bag play ${VEL_DATA_PATH} --topics ${VEL_BAG_TOPIC}"
     fi
+    local publisher_pid=${DEXEC_PID}
     HOST_PIDS+=("${publisher_pid}")
 
     echo "  Evaluation running... waiting for collector to finish."
