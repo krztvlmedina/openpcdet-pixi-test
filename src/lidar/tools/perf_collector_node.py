@@ -4,7 +4,7 @@ Performance Collector Node for Real-Time Pipeline Evaluation
 
 This node subscribes to performance metrics (published as JSON strings on
 std_msgs/String topics) from the interpolation and detection nodes, correlates
-the messages by sequence_id, computes derived metrics, and outputs results
+the messages by timestamp proximity, computes derived metrics, and outputs results
 to CSV and JSON files.
 
 Both publishers (C++ interpolation node, Python detection node) serialize
@@ -159,9 +159,15 @@ class PerfCollectorNode(Node):
         self.csv_filename = self.output_dir / f"perf_results_{self.config_name}_{self.model_name}_{timestamp_str}.csv"
         self.json_filename = self.output_dir / f"summary_{self.config_name}_{self.model_name}_{timestamp_str}.json"
 
-        # Pending messages buffer (waiting for correlation), keyed by sequence_id
-        self.pending_interp: Dict[int, dict] = {}
-        self.pending_detect: Dict[int, dict] = {}
+        # Pending messages buffer (waiting for correlation).
+        # Matching is done by publish_timestamp proximity so that frames dropped
+        # by the (slower) detection node do not desync independent seq counters.
+        self.pending_interp_list: List[dict] = []
+        self.pending_detect_list: List[dict] = []
+        # Max transit time from interp publish to detect receive (seconds)
+        self._MAX_MATCH_LAG = 2.0
+        # Drop pending messages older than this (seconds)
+        self._MAX_PENDING_AGE = 10.0
 
         # Completed frame metrics
         self.completed_frames: List[FrameMetrics] = []
@@ -205,18 +211,10 @@ class PerfCollectorNode(Node):
             return
 
         self.total_received_interp += 1
-        seq_id = data.get("sequence_id", -1)
-
-        self.get_logger().debug(f"Received interp perf for seq {seq_id}")
-
-        # Check if we already have detection data for this sequence
-        if seq_id in self.pending_detect:
-            detect_data = self.pending_detect.pop(seq_id)
-            self._process_correlated_pair(data, detect_data)
-        else:
-            self.pending_interp[seq_id] = data
-
-        self._cleanup_pending(seq_id)
+        self.get_logger().debug(f"Received interp perf seq {data.get('sequence_id')}")
+        self.pending_interp_list.append(data)
+        self._try_match_pending()
+        self._cleanup_by_age()
 
     def detect_callback(self, msg: String):
         """Handle incoming detection performance JSON message."""
@@ -227,32 +225,58 @@ class PerfCollectorNode(Node):
             return
 
         self.total_received_detect += 1
-        seq_id = data.get("sequence_id", -1)
+        self.get_logger().debug(f"Received detect perf seq {data.get('sequence_id')}")
+        self.pending_detect_list.append(data)
+        self._try_match_pending()
+        self._cleanup_by_age()
 
-        self.get_logger().debug(f"Received detect perf for seq {seq_id}")
+    def _try_match_pending(self):
+        """Match pending interp+detect pairs by publish→receive timestamp proximity.
 
-        # Check if we already have interpolation data for this sequence
-        if seq_id in self.pending_interp:
-            interp_data = self.pending_interp.pop(seq_id)
-            self._process_correlated_pair(interp_data, data)
-        else:
-            self.pending_detect[seq_id] = data
+        For each waiting detection message, find the interpolation message whose
+        publish_timestamp is closest to (and just before) detect.receive_timestamp.
+        This is robust to dropped frames because it never relies on equal seq IDs.
+        """
+        made_match = True
+        while made_match:
+            made_match = False
+            for i, detect_data in enumerate(self.pending_detect_list):
+                t_recv = detect_data.get("receive_timestamp", 0.0)
+                best_interp = None
+                best_delta = self._MAX_MATCH_LAG + 1.0
+                best_j = -1
+                for j, interp_data in enumerate(self.pending_interp_list):
+                    t_pub = interp_data.get("publish_timestamp", 0.0)
+                    delta = t_recv - t_pub
+                    if 0.0 <= delta < best_delta:
+                        best_delta = delta
+                        best_interp = interp_data
+                        best_j = j
+                if best_interp is not None:
+                    self.pending_detect_list.pop(i)
+                    self.pending_interp_list.pop(best_j)
+                    self._process_correlated_pair(best_interp, detect_data)
+                    made_match = True
+                    break  # lists changed — restart outer loop
 
-        self._cleanup_pending(seq_id)
+    def _cleanup_by_age(self):
+        """Drop pending messages older than _MAX_PENDING_AGE to prevent memory growth."""
+        now = time.time()
+        cutoff = now - self._MAX_PENDING_AGE
 
-    def _cleanup_pending(self, current_seq: int):
-        """Remove old pending messages to prevent memory leak."""
-        threshold = max(0, current_seq - 100)
+        stale_interp = [d for d in self.pending_interp_list
+                        if d.get("publish_timestamp", 0.0) < cutoff]
+        for d in stale_interp:
+            self.get_logger().warn(
+                f"Dropping stale interp msg (seq {d.get('sequence_id')})")
+            self.pending_interp_list.remove(d)
 
-        old_interp = [k for k in self.pending_interp if k < threshold]
-        for k in old_interp:
-            self.get_logger().warn(f"Dropping unmatched interp message for seq {k}")
-            del self.pending_interp[k]
-
-        old_detect = [k for k in self.pending_detect if k < threshold]
-        for k in old_detect:
-            self.get_logger().warn(f"Dropping unmatched detect message for seq {k}")
-            del self.pending_detect[k]
+        stale_detect = [d for d in self.pending_detect_list
+                        if d.get("receive_timestamp", 0.0) < cutoff]
+        for d in stale_detect:
+            self.get_logger().warn(
+                f"Dropping stale detect msg (seq {d.get('sequence_id')})")
+            self.pending_detect_list.remove(d)
 
     def _process_correlated_pair(self, interp_data: dict, detect_data: dict):
         """Process a correlated pair of interpolation and detection JSON data."""
@@ -396,8 +420,8 @@ class PerfCollectorNode(Node):
             "collection_info": {
                 "total_interp_messages": self.total_received_interp,
                 "total_detect_messages": self.total_received_detect,
-                "unmatched_interp": len(self.pending_interp),
-                "unmatched_detect": len(self.pending_detect),
+                "unmatched_interp": len(self.pending_interp_list),
+                "unmatched_detect": len(self.pending_detect_list),
                 "timestamp": datetime.now().isoformat(),
             }
         }
