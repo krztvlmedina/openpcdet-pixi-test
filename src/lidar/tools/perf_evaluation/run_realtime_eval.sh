@@ -374,9 +374,11 @@ run_evaluation() {
     kill_in_container "${CONTAINER_OPENPCDET}" "ros2_node.py"
     kill_in_container "${CONTAINER_OPENPCDET}" "perf_collector_node.py"
 
-    # Wait for the OS to reap processes. Without this, a slow-to-die node can
-    # drain its subscription queue into the next run's collector.
-    sleep 3
+    # Wait for the OS to fully reap container processes. SIGKILL is immediate
+    # but the kernel still needs to clean up DDS participants and file descriptors.
+    # 8 s gives FastDDS time to expire the dead participant's lease so the next
+    # run's collector does not receive late-arriving DDS messages.
+    sleep 8
 
     HOST_PIDS=()
 

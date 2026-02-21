@@ -210,6 +210,16 @@ class PerfCollectorNode(Node):
             self.get_logger().warn(f"Failed to parse interp perf JSON: {e}")
             return
 
+        # Reject messages from a different interpolation config to prevent
+        # cross-run contamination (old interpolation node still alive).
+        msg_config = data.get("config_name", "")
+        if msg_config and self.config_name not in ("default", "") \
+                and msg_config != self.config_name:
+            self.get_logger().warn(
+                f"Ignoring interp msg from config '{msg_config}' "
+                f"(expected '{self.config_name}')")
+            return
+
         self.total_received_interp += 1
         self.get_logger().info(f"Received interp perf seq {data.get('sequence_id')}")
         self.pending_interp_list.append(data)
@@ -222,6 +232,16 @@ class PerfCollectorNode(Node):
             data = json.loads(msg.data)
         except json.JSONDecodeError as e:
             self.get_logger().warn(f"Failed to parse detect perf JSON: {e}")
+            return
+
+        # Reject messages from a different model to prevent cross-run
+        # contamination (old pcdet_node still alive and processing new frames).
+        msg_model = data.get("model_name", "")
+        if msg_model and self.model_name not in ("unknown", "") \
+                and msg_model != self.model_name:
+            self.get_logger().warn(
+                f"Ignoring detect msg from model '{msg_model}' "
+                f"(expected '{self.model_name}')")
             return
 
         self.total_received_detect += 1
