@@ -49,7 +49,7 @@ POINTCLOUD_TOPIC="interpolated_point_cloud"
 #   bin  → forces bin_publisher_node (KITTI .bin files)
 #   bag  → forces ros2 bag play (.db3 bag)
 DATA_TYPE="auto"
-VEL_BAG_TOPIC="velodyne_points"   # topic to replay when DATA_TYPE=bag
+VEL_BAG_TOPIC="/velodyne_points"   # topic to replay when DATA_TYPE=bag
 
 # ─── Model definitions ─────────────────────────────────────────────────────
 declare -A MODELS

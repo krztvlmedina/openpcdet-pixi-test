@@ -211,7 +211,7 @@ class PerfCollectorNode(Node):
             return
 
         self.total_received_interp += 1
-        self.get_logger().debug(f"Received interp perf seq {data.get('sequence_id')}")
+        self.get_logger().info(f"Received interp perf seq {data.get('sequence_id')}")
         self.pending_interp_list.append(data)
         self._try_match_pending()
         self._cleanup_by_age()
@@ -225,7 +225,7 @@ class PerfCollectorNode(Node):
             return
 
         self.total_received_detect += 1
-        self.get_logger().debug(f"Received detect perf seq {data.get('sequence_id')}")
+        self.get_logger().info(f"Received detect perf seq {data.get('sequence_id')}")
         self.pending_detect_list.append(data)
         self._try_match_pending()
         self._cleanup_by_age()
