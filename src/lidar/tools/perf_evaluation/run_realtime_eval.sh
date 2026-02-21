@@ -203,14 +203,12 @@ dexec_bg() {
 }
 
 kill_in_container() {
+    # pkill is a plain system binary — no ROS2 or pixi environment needed.
+    # -9 (SIGKILL) ensures immediate termination so processes cannot drain
+    # buffered subscription queues into the next evaluation run.
     local container="$1"
     local pattern="$2"
-
-    if [ "$container" = "$CONTAINER_VELODYNE" ]; then
-        docker exec "$container" bash -c "pixi run \"pkill -f '${pattern}' 2>/dev/null || true\""
-    else
-        docker exec "$container" bash -c "source /opt/ros2_humble/install/setup.bash && pkill -f '${pattern}' 2>/dev/null || true"
-    fi
+    docker exec "$container" bash -c "pkill -9 -f '${pattern}' 2>/dev/null || true"
 }
 
 wait_for_topic() {
@@ -375,6 +373,10 @@ run_evaluation() {
     kill_in_container "${CONTAINER_VELODYNE}" "pointcloud_interpolation_node"
     kill_in_container "${CONTAINER_OPENPCDET}" "ros2_node.py"
     kill_in_container "${CONTAINER_OPENPCDET}" "perf_collector_node.py"
+
+    # Wait for the OS to reap processes. Without this, a slow-to-die node can
+    # drain its subscription queue into the next run's collector.
+    sleep 3
 
     HOST_PIDS=()
 
