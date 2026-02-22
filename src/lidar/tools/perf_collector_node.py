@@ -336,8 +336,9 @@ class PerfCollectorNode(Node):
 
         if self.max_frames > 0 and frame_number >= self.warmup_frames + self.max_frames:
             # We've collected enough frames, trigger shutdown
-            self.get_logger().info(f"Reached max_frames ({self.max_frames}). Shutting down...")
+            self.get_logger().info(f"Reached max_frames ({self.max_frames}). Writing summary...")
             self._write_summary()
+            self.get_logger().info(f"Shutting down...")
             rclpy.shutdown()
             return
 
