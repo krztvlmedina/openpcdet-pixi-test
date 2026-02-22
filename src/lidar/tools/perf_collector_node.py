@@ -339,7 +339,7 @@ class PerfCollectorNode(Node):
             self.get_logger().info(f"Reached max_frames ({self.max_frames}). Writing summary...")
             self._write_summary()
             self.get_logger().info(f"Shutting down...")
-            rclpy.shutdown()
+            raise SystemExit
             return
 
         self.completed_frames.append(frame)
@@ -487,6 +487,8 @@ def main(args=None):
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
+    except SystemExit:
+        rclpy.logging.get_logger().info('Done')
     finally:
         node.destroy_node()
         rclpy.shutdown()
