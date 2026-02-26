@@ -92,6 +92,7 @@ services:
       - ../datos/kitti/db_infos:/OpenPCDet/data/kitti/db_infos/:cached
       - ../datos/reduced-kitti/db_infos:/OpenPCDet/data/reduced-kitti/db_infos/:cached
       - ../datos/output:/OpenPCDet/output:cached
+      - ../datos/output_runs:/OpenPCDet/output_runs:cached
       # - ..datos/interpolated-kitti/:/OpenPCDet/data/interpolated-kitti:ro
       - /media/cristobalmedina/SAMSUNG/memoria/interpolated-kitti/:/OpenPCDet/data/interpolated-kitti:ro
 

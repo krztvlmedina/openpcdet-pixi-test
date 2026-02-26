@@ -2,7 +2,7 @@
 set -e
 
 OPENPCDET_ROOT=/OpenPCDet
-DATA_ROOT=${OPENPCDET_ROOT}/data/interpolated-kitti
+DATA_ROOT=${OPENPCDET_ROOT}/data/reduced-kitti-bins
 OUTPUT_ROOT=${OPENPCDET_ROOT}/output
 FINAL_ROOT=${OPENPCDET_ROOT}/output_runs
 
@@ -31,11 +31,11 @@ for DATASET_PATH in ${DATA_ROOT}/*; do
         python3 src/lidar/tools/test.py \
             --dataset-root /OpenPCDet/data/reduced-kitti \
             --lidar-root "${DATASET_PATH}" \
-            --cfg_file src/lidar/tools/cfgs/kitti_models/interpolated/${CFG} \
+            --cfg_file src/lidar/tools/cfgs/kitti_models/downsampled/${CFG} \
             --batch_size 1 \
             --ckpt data/pretrained-models/${CKPT}
 
-        SRC_DIR=${OUTPUT_ROOT}/lidar/tools/cfgs/kitti_models/interpolated/${MODEL}        
+        SRC_DIR=${OUTPUT_ROOT}/lidar/tools/cfgs/kitti_models/downsampled/${MODEL}        
         DST_DIR=${RUN_DIR}/${DATASET}/${MODEL}
 
         mkdir -p "$(dirname "${DST_DIR}")"
