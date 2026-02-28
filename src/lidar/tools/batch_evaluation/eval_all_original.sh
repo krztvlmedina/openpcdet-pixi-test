@@ -2,13 +2,13 @@
 set -e
 
 OPENPCDET_ROOT=/OpenPCDet
-DATA_ROOT=${OPENPCDET_ROOT}/data/kitti
+DATA_ROOT=${OPENPCDET_ROOT}/data/original-kitti
 OUTPUT_ROOT=${OPENPCDET_ROOT}/output
 FINAL_ROOT=${OPENPCDET_ROOT}/output_runs
 
 TIMESTAMP=$(date +"%d-%m-%y_%H-%M")
 
-RUN_DIR=${FINAL_ROOT}/${TIMESTAMP}/kitti_models
+RUN_DIR=${FINAL_ROOT}/original/${TIMESTAMP}/kitti_models
 mkdir -p "${RUN_DIR}"
 
 declare -A MODELS
@@ -27,8 +27,9 @@ for MODEL in "${!MODELS[@]}"; do
 
     echo "  Model: ${MODEL}"
 
-    python3 src/lidar/tools/test.py \
+    python3 src/lidar/tools/setupandruntest.py \
         --dataset-root /OpenPCDet/data/kitti \
+        --image-set-root "${DATA_ROOT}" \
         --lidar-root "${DATA_ROOT}" \
         --cfg_file src/lidar/tools/cfgs/kitti_models/original/${CFG} \
         --batch_size 1 \
