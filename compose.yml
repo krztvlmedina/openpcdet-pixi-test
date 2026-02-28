@@ -79,18 +79,21 @@ services:
     volumes:
       - ./src/lidar:/OpenPCDet/src/lidar:cached
       # - ${PWD}/.pixi/pifenet.pixi.toml:/workspaces/pifenet/pixi.toml
-      - ../datos/kitti/training:/OpenPCDet/data/kitti/training
-      - ../datos/kitti/testing:/OpenPCDet/data/kitti/testing
-      - ../datos/kitti/gt_database:/OpenPCDet/data/kitti/gt_database:cached
+      - ../datos/kitti/training:/OpenPCDet/data/original-kitti/training
+      - ../datos/kitti/testing:/OpenPCDet/data/original-kitti/testing
+      - ../datos/kitti/ImageSets:/OpenPCDet/data/original-kitti/ImageSets
+      - ../datos/kitti/gt_database:/OpenPCDet/data/original-kitti/gt_database:cached
+      # # # db pickle files
+      - ../datos/kitti/db_infos:/OpenPCDet/data/original-kitti/db_infos:cached
+
       - ../datos/reduced-kitti:/OpenPCDet/data/reduced-kitti:cached
       - ../datos/reduced-kitti/gt_database:/OpenPCDet/data/reduced-kitti/gt_database:cached
+      - ../datos/reduced-kitti/db_infos:/OpenPCDet/data/reduced-kitti/db_infos/:cached
+
       - ./data/npy_data:/OpenPCDet/data/npy_data/:cached
       - ../datos/ros1_rosbags/:/OpenPCDet/data/ros1_rosbags/:cached
       - ../datos/pretrained-models/:/OpenPCDet/data/pretrained-models:cached
       - ../datos/confs/parta2-anchor.yaml:/OpenPCDet/data/confs/parta2-anchor.yaml:cached
-      # # # db pickle files
-      - ../datos/kitti/db_infos:/OpenPCDet/data/kitti/db_infos/:cached
-      - ../datos/reduced-kitti/db_infos:/OpenPCDet/data/reduced-kitti/db_infos/:cached
       - ../datos/output:/OpenPCDet/output:cached
       - ../datos/output_runs:/OpenPCDet/output_runs:cached
       # - ..datos/interpolated-kitti/:/OpenPCDet/data/interpolated-kitti:ro
@@ -150,6 +153,7 @@ services:
       # - ./packages/dynamic_lidar_interpolation:/app/packages/dynamic_lidar_interpolation:cached
       # - ./packages/pointcloud_utils:/app/packages/pointcloud_utils:cached
       - ./pixi_confs/ros2.pixi.toml:/app/pixi.toml:cached
+      - ./scripts/batch_downsample.sh:/app/scripts/batch_downsample.sh:cached
       - ./pixi_confs/dynamic_lidar_interpolation.pixi.toml:/app/packages/dynamic_lidar_interpolation/pixi.toml:cached
       # - ./pixi_confs/pointcloud_utils.pixi.toml:/app/packages/pointcloud_utils/pixi.toml:cached
       - ./pixi_confs/ros2_numpy.pixi.toml:/app/packages/ros2_numpy/pixi.toml:cached

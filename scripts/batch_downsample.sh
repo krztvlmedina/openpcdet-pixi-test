@@ -13,7 +13,7 @@ fi
 
 INPUT_DIR=$1
 OUTPUT_DIR=$2
-SCRIPT="packages/dynamic_lidar_interpolation/scripts/downsample_64_to_16.py"
+SCRIPT="packages/pointcloud_utils/scripts/downsample_64_to_16.py"
 
 # Verificar que existe el directorio de entrada
 if [ ! -d "$INPUT_DIR" ]; then
