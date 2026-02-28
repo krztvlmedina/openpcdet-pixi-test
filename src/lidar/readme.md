@@ -20,10 +20,14 @@ Second_iou:
 
 python3 src/lidar/tools/ros2_node.py --cfg_file src/lidar/tools/cfgs/kitti_models/interpolated/second_iou.yaml --ckpt data/pretrained-models/second_iou7909.pth --pointcloud_topic \interpolated_point_cloud
 
+Para la creación de metadata de base de datos (ejecutando desde /OpenPCDet/):
+
+- Original:
+python3 -m pcdet.datasets.kitti.kitti_dataset create_kitti_infos tools/cfgs/dataset_configs/kitti_dataset.yaml
+- Reducida:
+python3 -m pcdet.datasets.kitti.fixed_kitti_dataset create_kitti_infos src/lidar/tools/cfgs/dataset_configs/create_dataset_info_downsampled_kitti_dataset.yaml
 
 Testing:
-
-python3 -m pcdet.datasets.kitti.kitti_dataset create_kitti_infos tools/cfgs/dataset_configs/kitti_dataset.yaml
 
 python3 tools/test.py --cfg_file ${CONFIG_FILE} --batch_size ${BATCH_SIZE} --ckpt ${CKPT}
 
@@ -32,7 +36,9 @@ python3 tools/test.py --cfg_file src/lidar/tools/cfgs/kitti_models/custom_pointr
 
 ## Testeo con symlinks para archivos generales de configuración y datos interpolados
 
-python3 src/lidar/tools/test.py --dataset-root /OpenPCDet/data/reduced-kitti --lidar-root <path-to-lidar-bins> --cfg_file src/lidar/tools/cfgs/kitti_models/custom_pointrcnn_iou.yaml --batch_size 1 --ckpt data/pretrained-models/pointrcnn_iou_7875.pth 
+Ejemplo con PointRCNN_IOU:
+
+python3 src/lidar/tools/setupandruntest.py --dataset-root <path-to-dataset-metadata> --image-sets-root <path-to-image-sets> --lidar-root <path-to-lidar-bins> --cfg_file src/lidar/tools/cfgs/kitti_models/custom_pointrcnn_iou.yaml --batch_size 1 --ckpt data/pretrained-models/pointrcnn_iou_7875.pth 
 
 ## Evaluación automática de modelos OpenPCDet y generación de tablas LaTeX
 

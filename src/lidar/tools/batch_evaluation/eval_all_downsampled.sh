@@ -8,7 +8,7 @@ FINAL_ROOT=${OPENPCDET_ROOT}/output_runs
 
 TIMESTAMP=$(date +"%d-%m-%y_%H-%M")
 
-RUN_DIR=${FINAL_ROOT}/${TIMESTAMP}/kitti_models
+RUN_DIR=${FINAL_ROOT}/downsampled/${TIMESTAMP}/kitti_models
 mkdir -p "${RUN_DIR}"
 
 declare -A MODELS
@@ -29,6 +29,7 @@ for MODEL in "${!MODELS[@]}"; do
 
     python3 src/lidar/tools/setupandruntest.py \
         --dataset-root "${DATA_ROOT}" \
+        --image-set-root "${DATA_ROOT}" \
         --lidar-root "${DATA_ROOT}" \
         --cfg_file src/lidar/tools/cfgs/kitti_models/downsampled/${CFG} \
         --batch_size 1 \

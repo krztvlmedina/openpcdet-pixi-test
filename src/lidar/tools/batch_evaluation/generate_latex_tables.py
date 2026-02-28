@@ -3,19 +3,34 @@ from pathlib import Path
 
 CLASSES = ["Car", "Pedestrian", "Cyclist"]
 DIFFICULTIES = ["Easy", "Moderate", "Hard"]
+RECALL_KEYS = [
+    "recall_roi_0.3",  "recall_rcnn_0.3",
+    "recall_roi_0.5",  "recall_rcnn_0.5",
+    "recall_roi_0.7",  "recall_rcnn_0.7",
+]
 
 # -------------------------------------------------
-# Parseo del log: AP_R40 → bbox AP
+# Parseo del log: AP_R40 → bbox AP + recall values
 # -------------------------------------------------
 
 def parse_log(log_path):
-    results = {}
+    ap_results = {}
+    recall_results = {}
     current_class = None
     in_ap_r40_block = False
 
     with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
         for line in f:
             line = line.strip()
+
+            # Recall lines look like: "... INFO  recall_roi_0.3: 0.970099"
+            for key in RECALL_KEYS:
+                tag = key + ":"
+                if tag in line:
+                    try:
+                        recall_results[key] = float(line.split(tag)[1].strip())
+                    except Exception:
+                        pass
 
             # Inicio del bloque AP_R40 para una clase
             for cls in CLASSES:
@@ -31,29 +46,27 @@ def parse_log(log_path):
             if line.startswith("bbox"):
                 try:
                     values = line.split(":")[1].split(",")
-                    results[current_class] = {
-                        "Easy": float(values[0]),
+                    ap_results[current_class] = {
+                        "Easy":     float(values[0]),
                         "Moderate": float(values[1]),
-                        "Hard": float(values[2]),
+                        "Hard":     float(values[2]),
                     }
                 except Exception:
                     pass
 
-                # Cerrar bloque
                 current_class = None
                 in_ap_r40_block = False
 
-    return results
+    return ap_results, recall_results
 
 # -------------------------------------------------
-# Generación de tabla LaTeX
+# Tabla LaTeX: bbox AP_R40
 # -------------------------------------------------
 
-def latex_table(data):
+def latex_ap_table(data):
     lines = []
-
     lines.append(r"\begin{tabular}{lccc ccc ccc}")
-    lines.append(r"\toprule")
+    lines.append(r"\hline")
     lines.append(
         r"Model & "
         r"\multicolumn{3}{c}{Car} & "
@@ -65,23 +78,50 @@ def latex_table(data):
         r"Easy & Mod & Hard & "
         r"Easy & Mod & Hard \\"
     )
-    lines.append(r"\midrule")
+    lines.append(r"\hline")
 
     for model, res in sorted(data.items()):
         row = [model.replace("_", r"\_")]
-
         for cls in CLASSES:
             if cls in res:
                 for diff in DIFFICULTIES:
                     row.append(f"{res[cls][diff]:.2f}")
             else:
                 row.extend(["-", "-", "-"])
-
         lines.append(" & ".join(row) + r" \\")
 
-    lines.append(r"\bottomrule")
+    lines.append(r"\hline")
     lines.append(r"\end{tabular}")
+    return "\n".join(lines)
 
+# -------------------------------------------------
+# Tabla LaTeX: recall values
+# -------------------------------------------------
+
+RECALL_HEADERS = [
+    r"roi@0.3", r"rcnn@0.3",
+    r"roi@0.5", r"rcnn@0.5",
+    r"roi@0.7", r"rcnn@0.7",
+]
+
+def latex_recall_table(data):
+    lines = []
+    lines.append(r"\begin{tabular}{l" + "c" * len(RECALL_KEYS) + "}")
+    lines.append(r"\hline")
+    lines.append("Model & " + " & ".join(RECALL_HEADERS) + r" \\")
+    lines.append(r"\hline")
+
+    for model, recall in sorted(data.items()):
+        row = [model.replace("_", r"\_")]
+        for key in RECALL_KEYS:
+            if key in recall:
+                row.append(f"{recall[key]:.4f}")
+            else:
+                row.append("-")
+        lines.append(" & ".join(row) + r" \\")
+
+    lines.append(r"\hline")
+    lines.append(r"\end{tabular}")
     return "\n".join(lines)
 
 # -------------------------------------------------
@@ -108,32 +148,37 @@ def main():
             continue
 
         dataset_name = dataset_dir.name
-        table_data = {}
+        ap_data = {}
+        recall_data = {}
 
         for model_dir in dataset_dir.iterdir():
             if not model_dir.is_dir():
                 continue
 
             model_name = model_dir.name
-
             logs = sorted(model_dir.rglob("log_eval_*.txt"))
             if not logs:
                 continue
 
-            log_path = logs[-1]
-            parsed = parse_log(log_path)
+            ap_res, recall_res = parse_log(logs[-1])
 
-            if parsed:
-                table_data[model_name] = parsed
+            if ap_res:
+                ap_data[model_name] = ap_res
+            if recall_res:
+                recall_data[model_name] = recall_res
 
-        if not table_data:
+        if not ap_data and not recall_data:
             continue
 
-        latex = latex_table(table_data)
-        out_file = latex_dir / f"table_{dataset_name}.txt"
-        out_file.write_text(latex)
+        parts = []
+        if ap_data:
+            parts.append("% --- bbox AP\\_R40 ---\n" + latex_ap_table(ap_data))
+        if recall_data:
+            parts.append("% --- Recall ---\n" + latex_recall_table(recall_data))
 
-        print(f"Generated bbox AP_R40 table: {out_file}")
+        out_file = latex_dir / f"table_{dataset_name}.tex"
+        out_file.write_text("\n\n".join(parts))
+        print(f"Generated tables: {out_file}")
 
 if __name__ == "__main__":
     main()

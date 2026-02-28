@@ -3,7 +3,7 @@ import sys
 import argparse
 import subprocess
 from pathlib import Path
-
+#Debe ser ejecutado desde raiz de proyecto
 # ------------------------------------------------------------------
 # Constants
 # ------------------------------------------------------------------
@@ -35,6 +35,7 @@ def mkdir(path: Path):
 # ------------------------------------------------------------------
 def setup_symlinks(
     dataset_root: Path,
+    imageset_root: Path,
     lidar_root: Path,
     workspace: Path,
 ):
@@ -55,7 +56,7 @@ def setup_symlinks(
         symlink(dataset_root / pkl, workspace / pkl)
 
     # ---- Top-level directories ----
-    symlink(dataset_root / "ImageSets",   workspace / "ImageSets")
+    symlink(imageset_root / "ImageSets",   workspace / "ImageSets")
     symlink(dataset_root / "db_infos",    workspace / "db_infos")
     symlink(dataset_root / "gt_database", workspace / "gt_database")
 
@@ -87,7 +88,14 @@ def main():
         "--dataset-root",
         required=True,
         type=Path,
-        help="Root directory containing KITTI metadata, labels, images, PKLs"
+        help="Root directory containing KITTI metadata, labels, PKLs"
+    )
+
+        parser.add_argument(
+        "--image-set-root",
+        required=True,
+        type=Path,
+        help="Root directory containing KITTI images"
     )
 
     parser.add_argument(
@@ -100,8 +108,8 @@ def main():
     parser.add_argument(
         "--workspace",
         type=Path,
-        default=Path("/OpenPCDet/workspace"),
-        help="OpenPCDet workspace directory (default: /OpenPCDet/workspace)"
+        default=Path("/OpenPCDet/data/kitti"),
+        help="OpenPCDet workspace directory (default: /OpenPCDet/data/kitti)"
     )
 
     # Everything else goes straight to tools/test.py
