@@ -170,15 +170,15 @@ def main():
         if not ap_data and not recall_data:
             continue
 
-        parts = []
         if ap_data:
-            parts.append("% --- bbox AP\\_R40 ---\n" + latex_ap_table(ap_data))
-        if recall_data:
-            parts.append("% --- Recall ---\n" + latex_recall_table(recall_data))
+            out_ap = latex_dir / f"table_{dataset_name}.tex"
+            out_ap.write_text(latex_ap_table(ap_data))
+            print(f"Generated AP table:     {out_ap}")
 
-        out_file = latex_dir / f"table_{dataset_name}.tex"
-        out_file.write_text("\n\n".join(parts))
-        print(f"Generated tables: {out_file}")
+        if recall_data:
+            out_recall = latex_dir / f"table_{dataset_name}_recall.tex"
+            out_recall.write_text(latex_recall_table(recall_data))
+            print(f"Generated recall table: {out_recall}")
 
 if __name__ == "__main__":
     main()
