@@ -18,6 +18,32 @@ from pathlib import Path
 import sys
 from tqdm import tqdm
 
+# ─── Hardware-defined elevation angles ───────────────────────────────────────
+#
+# Velodyne HDL-64E S2 (KITTI sensor)
+# Upper block: 32 beams from +2.00° down to −8.33°, spacing 1/3°
+# Lower block: 32 beams from −8.83° down to −24.33°, spacing 1/2°
+# Sorted ascending (ring 0 = lowest beam).
+_HDL64E_UPPER = np.arange(32) / 3.0 - 8.33           # −8.33 … +2.00  (1/3° steps)
+_HDL64E_LOWER = np.arange(32) * (-0.5) - 8.83         # −8.83 … −24.33 (0.5° steps)
+HDL64E_ELEVATIONS = np.sort(np.concatenate([_HDL64E_UPPER, _HDL64E_LOWER]))  # 64 values
+
+# Velodyne VLP-16: 16 beams from −15° to +15° in 2° uniform steps.
+VLP16_ELEVATIONS = np.arange(16) * 2.0 - 15.0   # −15, −13, …, +13, +15
+
+# Pre-compute which HDL-64E ring best represents each VLP-16 beam.
+# VLP-16 beams above +2° (the HDL-64E maximum) all collapse to the top ring;
+# after deduplication this leaves 10 unique rings for the overlapping FOV.
+_VLP16_TO_HDL64_RING = np.array([
+    int(np.argmin(np.abs(HDL64E_ELEVATIONS - a))) for a in VLP16_ELEVATIONS
+])
+# Mid-point bin edges for assigning measured points to HDL-64E rings.
+_HDL64E_BIN_EDGES = np.concatenate([
+    [-np.inf],
+    (HDL64E_ELEVATIONS[:-1] + HDL64E_ELEVATIONS[1:]) / 2.0,
+    [np.inf],
+])
+
 try:
     import bin_file_utils
 except ImportError:
@@ -43,61 +69,63 @@ def calculate_elevation_angle(x, y, z):
 
 def downsample_64_to_16_rings(x, y, z, intensity, num_rings=16, verbose=True):
     """
-    Reduce datos de 64 canales a 16 canales seleccionando anillos uniformemente.
+    Simula la captura de una Velodyne VLP-16 a partir de datos HDL-64E.
 
-    Velodyne HDL-64E tiene FOV vertical de aproximadamente -24.9° a +2°
-    Velodyne VLP-16 tiene FOV vertical de aproximadamente -15° a +15°
+    Cada punto se asigna al anillo HDL-64E más cercano usando los ángulos de
+    elevación nominales del hardware (fijos, independientes del frame).
+    Luego se seleccionan los anillos HDL-64E que mejor representan los
+    num_rings ángulos de elevación del VLP-16.
+
+    Nota física: el HDL-64E cubre −24.9° a +2° y el VLP-16 cubre −15° a +15°.
+    En la zona de solapamiento (−15° a +2°) hay 10 anillos HDL-64E únicos que
+    corresponden a beams VLP-16; los 6 beams VLP-16 por encima de +2° colapsan
+    al anillo superior del HDL-64E (+2°). Por tanto el resultado tiene entre 10
+    y 16 anillos efectivos según num_rings.
 
     Args:
-        x, y, z: Coordenadas de los puntos
-        intensity: Valores de intensidad
-        num_rings: Número de anillos a mantener (default: 16)
-        verbose: Si True, imprime información detallada
+        x, y, z:    Coordenadas de los puntos
+        intensity:  Valores de intensidad
+        num_rings:  Número de beams VLP-16 a simular (default: 16)
+        verbose:    Si True, imprime información detallada
 
     Returns:
-        Tupla de (x_down, y_down, z_down, intensity_down) con datos reducidos
+        Tupla (x_down, y_down, z_down, intensity_down)
     """
-    # Calcular ángulos de elevación
     elevations = calculate_elevation_angle(x, y, z)
 
-    # Determinar el rango de elevación
-    min_elev = elevations.min()
-    max_elev = elevations.max()
+    # Asignar cada punto a su anillo HDL-64E más cercano usando bins fijos.
+    hdl_ring = np.digitize(elevations, _HDL64E_BIN_EDGES) - 1
+    hdl_ring = np.clip(hdl_ring, 0, 63)
+
+    # Determinar qué anillos HDL-64E corresponden a los beams VLP-16 pedidos.
+    vlp16_angles = VLP16_ELEVATIONS[:num_rings]
+    target_rings = np.array([
+        int(np.argmin(np.abs(HDL64E_ELEVATIONS - a))) for a in vlp16_angles
+    ])
+    # Deduplicar manteniendo orden (beams VLP-16 fuera del FOV HDL-64E colapsan).
+    seen = set()
+    selected_rings = []
+    for r in target_rings:
+        if r not in seen:
+            seen.add(r)
+            selected_rings.append(r)
+    selected_rings = np.array(selected_rings)
 
     if verbose:
-        print(f"Rango de elevación original: {min_elev:.2f}° a {max_elev:.2f}°")
-
-    # Crear bins para los anillos
-    # Dividimos el rango de elevación en 64 bins (asumiendo 64 canales originales)
-    num_original_rings = 64
-    elevation_bins = np.linspace(min_elev, max_elev, num_original_rings + 1)
-
-    # Asignar cada punto a su anillo correspondiente
-    ring_indices = np.digitize(elevations, elevation_bins) - 1
-    ring_indices = np.clip(ring_indices, 0, num_original_rings - 1)
-
-    # Seleccionar cuáles anillos mantener (distribuidos uniformemente)
-    # Por ejemplo, para 16 anillos de 64: seleccionar cada 4to anillo
-    stride = num_original_rings // num_rings
-    selected_rings = np.arange(0, num_original_rings, stride)[:num_rings]
-
-    if verbose:
-        print(f"Anillos seleccionados: {selected_rings}")
-        print(f"Ángulos de elevación aproximados:")
+        print(f"Rango de elevación de los datos: "
+              f"{elevations.min():.2f}° a {elevations.max():.2f}°")
+        print(f"Anillos HDL-64E seleccionados ({len(selected_rings)} únicos de {num_rings} pedidos):")
         for i, ring_idx in enumerate(selected_rings):
-            angle = elevation_bins[ring_idx]
-            print(f"  Anillo {i}: {angle:.2f}°")
+            vlp_angle = vlp16_angles[i] if i < len(vlp16_angles) else "—"
+            hdl_angle = HDL64E_ELEVATIONS[ring_idx]
+            print(f"  VLP-16 beam {i:2d} ({vlp_angle:+.0f}°) → "
+                  f"HDL-64E ring {ring_idx:2d} ({hdl_angle:+.2f}°)")
+        if len(selected_rings) < num_rings:
+            print(f"  [{num_rings - len(selected_rings)} beams VLP-16 fuera del "
+                  f"FOV HDL-64E colapsaron al anillo superior]")
 
-    # Crear máscara para puntos que pertenecen a los anillos seleccionados
-    mask = np.isin(ring_indices, selected_rings)
-
-    # Filtrar puntos
-    x_down = x[mask]
-    y_down = y[mask]
-    z_down = z[mask]
-    intensity_down = intensity[mask]
-
-    return x_down, y_down, z_down, intensity_down
+    mask = np.isin(hdl_ring, selected_rings)
+    return x[mask], y[mask], z[mask], intensity[mask]
 
 
 def process_single_file(input_file, output_file, num_rings=16, dry_run=False, verbose=True):
