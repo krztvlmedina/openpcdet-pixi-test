@@ -122,6 +122,7 @@ def main():
 
     setup_symlinks(
         dataset_root=args.dataset_root.resolve(),
+        imageset_root=args.image_set_root.resolve(),
         lidar_root=args.lidar_root.resolve(),
         imageset_root=args.image_set_root.resolve(),
         workspace=args.workspace.resolve(),

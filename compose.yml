@@ -98,7 +98,7 @@ services:
       - ../datos/output_runs:/OpenPCDet/output_runs:cached
       # - ..datos/interpolated-kitti/:/OpenPCDet/data/interpolated-kitti:ro
       - /media/cristobalmedina/SAMSUNG/memoria/interpolated-kitti/:/OpenPCDet/data/interpolated-kitti:ro
-
+      - ./src/lidar/tools/fixed_kitti_dataset.py:/OpenPCDet/pcdet/datasets/kitti/fixed_kitti_dataset.py:cached
 
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
