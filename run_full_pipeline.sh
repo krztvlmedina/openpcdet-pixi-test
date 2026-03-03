@@ -105,7 +105,7 @@ check_storage() {
     # Check free space in the OpenPCDet container's data directory
     local free_gb
     free_gb=$(docker exec "${CONTAINER_OPENPCDET}" bash -c \
-        "df -BG '${OPC_DATA}' | awk 'NR==2{gsub(\"G\",\"\",$4); print $4}'")
+        "df -BG '${OPC_DATA}' | awk 'NR==2{gsub(\"G\",\"\",\$4); print \$4}'")
     log "Free space in ${OPC_DATA}: ${free_gb} GB (need ${MIN_FREE_GB} GB)"
     if [[ "${free_gb}" -lt "${MIN_FREE_GB}" ]]; then
         echo "ERROR: Insufficient storage. ${free_gb} GB free, ${MIN_FREE_GB} GB required." >&2
