@@ -75,6 +75,7 @@ CONTAINER_OPENPCDET="${CONTAINER_OPENPCDET:-velodyne_openpcdet}"
 
 # ─── Paths inside the velodyne container ─────────────────────────────────────
 VEL_SCRIPTS="/app/packages/pointcloud_utils/scripts"
+VEL_INTERP_SCRIPT="/app/packages/dynamic_lidar_interpolation/scripts/interpolate_bin_batch.py"
 VEL_INTERP_CONFIG_DIR="/app/data/config_files/interpolation/final"
 VEL_KITTI_VELODYNE="/app/data/kitti/"
 VEL_KITTI_REDUCED="/app/data/reduced-kitti"
@@ -102,7 +103,6 @@ OPC_CFG_REDUCED="src/lidar/tools/cfgs/dataset_configs/create_dataset_info_downsa
 
 # Minimum free space in GB required before starting
 MIN_FREE_GB=50
-SETTLE_TIME=5
 
 # ─── Result root ─────────────────────────────────────────────────────────────
 # Host path mirrors the ../datos/output_runs → /OpenPCDet/output_runs mount.
@@ -156,43 +156,6 @@ log()  { echo "[$(date +%H:%M:%S)] $*"; }
 step() { echo; echo "════════════════════════════════════════════════════════"; \
          echo " $*"; echo "════════════════════════════════════════════════════════"; }
 
-DEXEC_PID=""
-HOST_PIDS=()
-
-# Route background docker exec to the correct command prefix per container:
-#   velodyne   → pixi run  (ROS2/Python managed by pixi)
-#   openpcdet  → source ROS2 humble setup
-dexec_bg() {
-    local container="$1"; shift
-    if [ "$container" = "$CONTAINER_VELODYNE" ]; then
-        docker exec "$container" bash -c "pixi run \"$*\"" &
-    else
-        docker exec "$container" bash -c "source /opt/ros2_humble/install/setup.bash && $*" &
-    fi
-    DEXEC_PID=$!
-}
-
-kill_in_container() {
-    local container="$1"; local pattern="$2"
-    docker exec "$container" bash -c "pkill -15 -f '${pattern}' 2>/dev/null || true" || true
-    sleep 1
-    docker exec "$container" bash -c "pkill -9 -f '${pattern}' 2>/dev/null || true" || true
-}
-
-# Both containers share network_mode:host and the same FastDDS domain, so topics
-# published in velodyne are visible from openpcdet and vice-versa.
-# We always check from openpcdet since it sources ROS2 directly.
-wait_for_topic() {
-    local container="$1"; local topic="$2"; local timeout="${3:-30}"; local elapsed=0
-    echo "  Waiting for topic ${topic}..."
-    while ! docker exec "$container" bash -c \
-            "source /opt/ros2_humble/install/setup.bash && ros2 topic list 2>/dev/null" \
-            | grep -q "${topic}"; do
-        sleep 1; elapsed=$((elapsed + 1))
-        if [ "$elapsed" -ge "$timeout" ]; then return 1; fi
-    done
-    return 0
-}
 
 # ─── Step 0: Storage check ───────────────────────────────────────────────────
 # Check both mounts: openpcdet (eval outputs) and the external drive where
@@ -295,80 +258,11 @@ run_kitti_infos() {
 }
 
 # ─── Step 3: Generate interpolated datasets ───────────────────────────────────
-# All three nodes run in the velodyne container because:
-#   • The interpolated-kitti mount is read-only in openpcdet.
-#   • save_interpolated_clouds.py needs write access to VEL_KITTI_INTERP_BASE.
-#
-# Bins are written to <cfg_name>/training/velodyne/ so that setupandruntest.py
-# can symlink them correctly (it looks for lidar_root/training/velodyne).
-run_one_interpolation() {
-    local cfg_file="$1"
-    local cfg_name="$2"
-    local out_dir="${VEL_KITTI_INTERP_BASE}/${cfg_name}/training/velodyne"
-
-    echo "------------------------------------------------------------"
-    echo " CONFIG: ${cfg_name}"
-    echo "------------------------------------------------------------"
-
-    # docker exec "${CONTAINER_VELODYNE}" bash -c "mkdir -p '${out_dir}'"
-
-    # 1. Interpolation node (velodyne, background)
-    dexec_bg "${CONTAINER_VELODYNE}" \
-        "ros2 run dynamic_lidar_interpolation pointcloud_interpolation_node \
-         --ros-args --params-file '${cfg_file}'"
-    local interp_pid=${DEXEC_PID}; HOST_PIDS+=("${interp_pid}")
-
-    # 2. Wait for the interpolated topic, then start cloud saver (velodyne, background).
-    #    Checked from openpcdet since it sources ROS2 directly; topic is on the shared domain.
-    wait_for_topic "${CONTAINER_OPENPCDET}" "interpolated_point_cloud" 30 || true
-
-    dexec_bg "${CONTAINER_VELODYNE}" \
-        "python3 ${VEL_SCRIPTS}/save_interpolated_clouds.py \
-            --input-dir  ${VEL_KITTI_REDUCED}/training/velodyne \
-            --output-dir ${out_dir} \
-            --topic      interpolated_point_cloud \
-            --timeout    60"
-    local saver_pid=${DEXEC_PID}; HOST_PIDS+=("${saver_pid}")
-
-    # 3. Publish reduced frames once at 5 Hz (velodyne, background)
-    dexec_bg "${CONTAINER_VELODYNE}" \
-        "ros2 run pointcloud_utils bin_publisher_node \
-         --ros-args -p bin_directory:=${VEL_KITTI_REDUCED}/training/velodyne \
-                    -p publish_rate:=5.0 \
-                    -p loop:=false \
-                    -p topic:=velodyne_points"
-    local publisher_pid=${DEXEC_PID}; HOST_PIDS+=("${publisher_pid}")
-
-    # Wait for saver to finish (exits via rclpy.shutdown() after all frames saved)
-    local total_frames
-    total_frames=$(docker exec "${CONTAINER_VELODYNE}" bash -c \
-        "ls '${VEL_KITTI_REDUCED}/training/velodyne'/*.bin 2>/dev/null | wc -l" || echo "0")
-    local timeout_sec=$(( total_frames + 120 ))
-    local waited=0
-    echo "  Saving interpolated frames (expecting ~${total_frames})..."
-    while kill -0 "${saver_pid}" 2>/dev/null; do
-        sleep 2; waited=$((waited + 2))
-        if [ "$waited" -ge "$timeout_sec" ]; then
-            log "  WARNING: cloud saver timed out after ${waited}s"; break
-        fi
-    done
-
-    echo "  Shutting down interpolation nodes..."
-    {
-        for pid in "${publisher_pid}" "${interp_pid}" "${saver_pid}"; do
-            kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
-        done
-    } 2>/dev/null
-    kill_in_container "${CONTAINER_VELODYNE}" "pointcloud_interpolation_node"
-    kill_in_container "${CONTAINER_VELODYNE}" "bin_publisher_node"
-    kill_in_container "${CONTAINER_VELODYNE}" "save_interpolated_clouds"
-
-    HOST_PIDS=()
-    log "  Cooling down (${SETTLE_TIME}s)..."
-    sleep "${SETTLE_TIME}"
-    log "Done: ${cfg_name}"
-}
-
+# Calls interpolate_bin_batch.py directly in the velodyne container (no ROS2).
+# Both splits are processed independently; a split is skipped if its target
+# directory already exists and is non-empty.
+# Output layout: <cfg_name>/training/velodyne/ and <cfg_name>/testing/velodyne/
+# so that setupandruntest.py can find lidar_root/training/velodyne.
 run_interpolation() {
     step "Step 3: Generating interpolated datasets"
 
@@ -381,12 +275,63 @@ run_interpolation() {
         return
     fi
 
+    local train_src="${VEL_KITTI_REDUCED}/training/velodyne"
+    local test_src="${VEL_KITTI_REDUCED}/testing/velodyne"
+
     while IFS= read -r cfg_file; do
         [[ -z "${cfg_file}" ]] && continue
         local cfg_name
         cfg_name=$(basename "${cfg_file}" .yaml)
         [[ -n "${SINGLE_CONFIG}" && "${cfg_name}" != "${SINGLE_CONFIG}" ]] && continue
-        run_one_interpolation "${cfg_file}" "${cfg_name}"
+
+        local dataset_out="${VEL_KITTI_INTERP_BASE}/${cfg_name}"
+        local train_out="${dataset_out}/training/velodyne"
+        local test_out="${dataset_out}/testing/velodyne"
+
+        echo "------------------------------------------------------------"
+        echo " CONFIG: ${cfg_name}"
+        echo "------------------------------------------------------------"
+
+        # Ensure dataset folder exists and copy config there (always)
+        docker exec "${CONTAINER_VELODYNE}" bash -c \
+            "mkdir -p '${dataset_out}' && cp -f '${cfg_file}' '${dataset_out}/'"
+
+        # Check which splits need processing
+        local train_skip test_skip
+        train_skip=$(docker exec "${CONTAINER_VELODYNE}" bash -c \
+            "[[ -d '${train_out}' && -n \"\$(ls -A '${train_out}' 2>/dev/null)\" ]] \
+             && echo yes || echo no")
+        test_skip=$(docker exec "${CONTAINER_VELODYNE}" bash -c \
+            "[[ -d '${test_out}' && -n \"\$(ls -A '${test_out}' 2>/dev/null)\" ]] \
+             && echo yes || echo no")
+
+        if [[ "${train_skip}" == "yes" && "${test_skip}" == "yes" ]]; then
+            log "  SKIP: both splits already non-empty for ${cfg_name}"
+            continue
+        fi
+
+        docker exec "${CONTAINER_VELODYNE}" bash -c \
+            "mkdir -p '${dataset_out}/training' '${dataset_out}/testing'"
+
+        if [[ "${train_skip}" != "yes" ]]; then
+            log "  [1/2] Interpolating TRAIN split for ${cfg_name}..."
+            docker exec "${CONTAINER_VELODYNE}" bash -c \
+                "pixi run python3 '${VEL_INTERP_SCRIPT}' \
+                    '${train_src}' '${train_out}' --config '${cfg_file}'"
+        else
+            log "  [1/2] SKIP TRAIN: already non-empty"
+        fi
+
+        if [[ "${test_skip}" != "yes" ]]; then
+            log "  [2/2] Interpolating TEST split for ${cfg_name}..."
+            docker exec "${CONTAINER_VELODYNE}" bash -c \
+                "pixi run python3 '${VEL_INTERP_SCRIPT}' \
+                    '${test_src}' '${test_out}' --config '${cfg_file}'"
+        else
+            log "  [2/2] SKIP TEST: already non-empty"
+        fi
+
+        log "Done: ${cfg_name}"
     done <<< "${configs}"
 }
 
