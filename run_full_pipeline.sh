@@ -151,11 +151,63 @@ MODELS[pv_rcnn]="pv_rcnn.yaml pv_rcnn_8369.pth"
 MODELS[second]="second.yaml second_7862.pth"
 MODELS[second_iou]="second_iou.yaml second_iou7909.pth"
 
+# ─── PKL file names (written by create_kitti_infos) ──────────────────────────
+# These land at the dataset root but that directory is not fully volume-mounted
+# for original-kitti, so they are lost on container restart.
+# We copy them into <root>/db_infos/ (which IS a separate persistent mount) and
+# restore them from there before evaluations.
+PKL_NAMES=(
+    kitti_infos_train.pkl
+    kitti_infos_val.pkl
+    kitti_infos_trainval.pkl
+    kitti_infos_test.pkl
+    kitti_dbinfos_train.pkl
+)
+
 # ─── Helpers (same pattern as run_realtime_eval.sh) ───────────────────────────
 log()  { echo "[$(date +%H:%M:%S)] $*"; }
 step() { echo; echo "════════════════════════════════════════════════════════"; \
          echo " $*"; echo "════════════════════════════════════════════════════════"; }
 
+# save_pkls CONTAINER ROOT
+#   Copies each PKL from ROOT/ into ROOT/db_infos/ (overwrites existing).
+save_pkls() {
+    local container="$1" root="$2"
+    log "  Saving PKLs → ${root}/db_infos/"
+    docker exec "${container}" bash -c "mkdir -p '${root}/db_infos'"
+    for pkl in "${PKL_NAMES[@]}"; do
+        docker exec "${container}" bash -c \
+            "[ -f '${root}/${pkl}' ] && cp -f '${root}/${pkl}' '${root}/db_infos/${pkl}' \
+             || echo '  (skip ${pkl}: not found)'"
+    done
+}
+
+# restore_pkls CONTAINER ROOT
+#   If any PKL is missing from ROOT/, copies all available ones from ROOT/db_infos/.
+restore_pkls() {
+    local container="$1" root="$2"
+    # Check whether all PKLs are already present
+    local all_present=true
+    for pkl in "${PKL_NAMES[@]}"; do
+        local present
+        present=$(docker exec "${container}" bash -c \
+            "[ -f '${root}/${pkl}' ] && echo yes || echo no")
+        if [[ "${present}" == "no" ]]; then all_present=false; break; fi
+    done
+    if [[ "${all_present}" == "true" ]]; then
+        log "  PKLs already present at ${root}/ — no restore needed."
+        return
+    fi
+    log "  Restoring PKLs from ${root}/db_infos/ ..."
+    for pkl in "${PKL_NAMES[@]}"; do
+        docker exec "${container}" bash -c \
+            "if [ -f '${root}/db_infos/${pkl}' ]; then \
+                 cp -f '${root}/db_infos/${pkl}' '${root}/${pkl}'; \
+             else \
+                 echo 'WARNING: ${pkl} not found in ${root}/db_infos/'; \
+             fi"
+    done
+}
 
 # ─── Step 0: Storage check ───────────────────────────────────────────────────
 # Check both mounts: openpcdet (eval outputs) and the external drive where
@@ -246,6 +298,7 @@ run_kitti_infos() {
              python3 -m pcdet.datasets.kitti.fixed_kitti_dataset \
                  create_kitti_infos ${OPC_CFG_ORIGINAL}"
         log "Original KITTI infos done."
+        save_pkls "${CONTAINER_OPENPCDET}" "${OPC_KITTI_DATA}"
     fi
 
     # ── 2c. Reduced-kitti infos (always regenerate after downsampling) ─────────
@@ -255,6 +308,7 @@ run_kitti_infos() {
          python3 -m pcdet.datasets.kitti.fixed_kitti_dataset \
              create_kitti_infos ${OPC_CFG_REDUCED}"
     log "Reduced-kitti infos done."
+    save_pkls "${CONTAINER_OPENPCDET}" "${OPC_KITTI_REDUCED}"
 }
 
 # ─── Step 3: Generate interpolated datasets ───────────────────────────────────
@@ -380,6 +434,7 @@ run_offline_evals() {
 
     # Original KITTI: data_root = imageset_root = lidar_root = OPC_KITTI_DATA
     log "--- Original KITTI ---"
+    restore_pkls "${CONTAINER_OPENPCDET}" "${OPC_KITTI_DATA}"
     run_batch_eval "original" \
         "${OPC_KITTI_DATA}" "${OPC_KITTI_DATA}" "${OPC_KITTI_DATA}" \
         "${OFFLINE_RAW}/original" "kitti"
@@ -387,11 +442,13 @@ run_offline_evals() {
     # Reduced KITTI: data_root = imageset_root = lidar_root = OPC_KITTI_REDUCED
     # (has training/velodyne with downsampled bins, plus symlinks to original aux data)
     log "--- Downsampled (reduced-kitti) ---"
+    restore_pkls "${CONTAINER_OPENPCDET}" "${OPC_KITTI_REDUCED}"
     run_batch_eval "downsampled" \
         "${OPC_KITTI_REDUCED}" "${OPC_KITTI_REDUCED}" "${OPC_KITTI_REDUCED}" \
         "${OFFLINE_RAW}/downsampled" "reduced"
 
     # Interpolated: PKLs from reduced-kitti, velodyne from interpolated dir.
+    # PKLs were already restored for OPC_KITTI_REDUCED above.
     log "--- Interpolated datasets ---"
     local configs
     configs=$(docker exec "${CONTAINER_OPENPCDET}" bash -c \
