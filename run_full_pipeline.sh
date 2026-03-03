@@ -76,7 +76,7 @@ CONTAINER_OPENPCDET="${CONTAINER_OPENPCDET:-velodyne_openpcdet}"
 # ─── Paths inside the velodyne container ─────────────────────────────────────
 VEL_SCRIPTS="/app/packages/pointcloud_utils/scripts"
 VEL_INTERP_CONFIG_DIR="/app/data/config_files/interpolation/final"
-VEL_KITTI_VELODYNE="/app/data/kitti/training/velodyne"
+VEL_KITTI_VELODYNE="/app/data/kitti/"
 VEL_KITTI_REDUCED="/app/data/reduced-kitti"
 VEL_KITTI_INTERP_BASE="/app/data/output/interpolated-kitti"   # read-write
 
@@ -215,10 +215,10 @@ check_storage() {
         echo "ERROR: Insufficient storage in openpcdet (${opc_free} GB < ${MIN_FREE_GB} GB)." >&2
         exit 1
     fi
-    if [[ "${vel_free}" -lt "${MIN_FREE_GB}" ]]; then
-        echo "ERROR: Insufficient storage on external drive (${vel_free} GB < ${MIN_FREE_GB} GB)." >&2
-        exit 1
-    fi
+    # if [[ "${vel_free}" -lt "${MIN_FREE_GB}" ]]; then
+    #     echo "ERROR: Insufficient storage on external drive (${vel_free} GB < ${MIN_FREE_GB} GB)." >&2
+    #     exit 1
+    # fi
     log "Storage OK."
 }
 
@@ -230,8 +230,14 @@ run_downsample() {
     docker exec "${CONTAINER_VELODYNE}" bash -c \
         "mkdir -p '${VEL_KITTI_REDUCED}/training/velodyne' && \
          pixi run python3 ${VEL_SCRIPTS}/downsample_64_to_16.py \
-             ${VEL_KITTI_VELODYNE} ${VEL_KITTI_REDUCED}/training/velodyne --batch"
+             ${VEL_KITTI_VELODYNE}/training/velodyne ${VEL_KITTI_REDUCED}/training/velodyne --batch"
     log "Downsampled dataset written to ${VEL_KITTI_REDUCED}/training/velodyne"
+    
+    docker exec "${CONTAINER_VELODYNE}" bash -c \
+        "mkdir -p '${VEL_KITTI_REDUCED}/testing/velodyne' && \
+         pixi run python3 ${VEL_SCRIPTS}/downsample_64_to_16.py \
+             ${VEL_KITTI_VELODYNE}/testing/velodyne ${VEL_KITTI_REDUCED}/testing/velodyne --batch"
+    log "Downsampled dataset written to ${VEL_KITTI_REDUCED}/testing/velodyne"
 }
 
 # ─── Step 2: KITTI dataset infos ─────────────────────────────────────────────
@@ -304,7 +310,7 @@ run_one_interpolation() {
     echo " CONFIG: ${cfg_name}"
     echo "------------------------------------------------------------"
 
-    docker exec "${CONTAINER_VELODYNE}" bash -c "mkdir -p '${out_dir}'"
+    # docker exec "${CONTAINER_VELODYNE}" bash -c "mkdir -p '${out_dir}'"
 
     # 1. Interpolation node (velodyne, background)
     dexec_bg "${CONTAINER_VELODYNE}" \
