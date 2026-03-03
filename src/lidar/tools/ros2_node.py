@@ -78,6 +78,7 @@ class PCDetNode(Node):
         self.model_name = getattr(args, 'model_name', 'unknown')
         self.sequence_id = 0
 
+
         # Initialize dataset
         self.demo_dataset = Ros2Dataset(
             dataset_cfg=cfg.DATA_CONFIG,
