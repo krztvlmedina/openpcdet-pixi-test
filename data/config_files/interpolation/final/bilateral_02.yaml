@@ -1,7 +1,7 @@
 pointcloud_interpolation_node:
   ros__parameters:
     lidar:
-      max_range: 30.0 # Maximum range filtering (meters)
+      max_range: 120.0 # Maximum range filtering (meters)
       min_range: 0.0    # Minimum range filtering (meters)
       
     range_image:

@@ -155,7 +155,7 @@ check_storage() {
 # Runs in openpcdet container (blocking); script path is mounted from velodyne app.
 run_downsample() {
     step "Step 1: Downsampling KITTI 64-beam → 16-beam (VLP-16 simulation)"
-    docker exec "${CONTAINER_OPENPCDET}" bash -c \
+    docker exec "${CONTAINER_VELODYNE}" bash -c \
         "cd ${OPC_ROOT} && python3 ${VEL_SCRIPTS}/downsample_64_to_16.py \
             ${KITTI_ORIGINAL} ${KITTI_REDUCED} --batch"
     log "Downsampled dataset written to ${KITTI_REDUCED}"

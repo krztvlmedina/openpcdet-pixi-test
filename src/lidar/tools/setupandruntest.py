@@ -91,7 +91,7 @@ def main():
         help="Root directory containing KITTI metadata, labels, PKLs"
     )
 
-        parser.add_argument(
+    parser.add_argument(
         "--image-set-root",
         required=True,
         type=Path,
@@ -123,6 +123,7 @@ def main():
     setup_symlinks(
         dataset_root=args.dataset_root.resolve(),
         lidar_root=args.lidar_root.resolve(),
+        imageset_root=args.image_set_root.resolve(),
         workspace=args.workspace.resolve(),
     )
 

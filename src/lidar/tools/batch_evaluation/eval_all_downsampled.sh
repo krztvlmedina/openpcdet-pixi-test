@@ -4,11 +4,11 @@ set -e
 OPENPCDET_ROOT=/OpenPCDet
 DATA_ROOT=${OPENPCDET_ROOT}/data/reduced-kitti
 OUTPUT_ROOT=${OPENPCDET_ROOT}/output
-FINAL_ROOT=${OPENPCDET_ROOT}/output_runs
+FINAL_ROOT=${OPENPCDET_ROOT}/output_runs/downsampled
 
 TIMESTAMP=$(date +"%d-%m-%y_%H-%M")
 
-RUN_DIR=${FINAL_ROOT}/downsampled/${TIMESTAMP}/kitti_models
+RUN_DIR=${FINAL_ROOT}/${TIMESTAMP}/kitti_models
 mkdir -p "${RUN_DIR}"
 
 declare -A MODELS

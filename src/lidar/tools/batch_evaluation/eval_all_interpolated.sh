@@ -4,11 +4,11 @@ set -e
 OPENPCDET_ROOT=/OpenPCDet
 DATA_ROOT=${OPENPCDET_ROOT}/data/interpolated-kitti
 OUTPUT_ROOT=${OPENPCDET_ROOT}/output
-FINAL_ROOT=${OPENPCDET_ROOT}/output_runs
+FINAL_ROOT=${OPENPCDET_ROOT}/output_runs/interpolated
 
 TIMESTAMP=$(date +"%d-%m-%y_%H-%M")
 
-RUN_DIR=${FINAL_ROOT}/interpolated/${TIMESTAMP}/kitti_models
+RUN_DIR=${FINAL_ROOT}/${TIMESTAMP}/kitti_models
 mkdir -p "${RUN_DIR}"
 
 declare -A MODELS
@@ -29,8 +29,8 @@ for DATASET_PATH in ${DATA_ROOT}/*; do
         echo "  Model: ${MODEL}"
 
         python3 src/lidar/tools/setupandruntest.py \
-            --dataset-root /OpenPCDet/data/interpolated-kitti \
-            --image-set-root "${DATA_ROOT}" \
+            --dataset-root /OpenPCDet/data/reduced-kitti \
+            --image-set-root /OpenPCDet/data/reduced-kitti \
             --lidar-root "${DATASET_PATH}" \
             --cfg_file src/lidar/tools/cfgs/kitti_models/interpolated/${CFG} \
             --batch_size 1 \

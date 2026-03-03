@@ -1,19 +1,19 @@
 pointcloud_interpolation_node:
   ros__parameters:
     lidar:
-      max_range: 120.0 # Maximum range filtering (meters)
+      max_range: 30.0 # Maximum range filtering (meters)
       min_range: 0.0    # Minimum range filtering (meters)
       
     range_image:
       angular_resolution_x: 0.08  # Angular resolution in the X direction (degrees)
       angular_resolution_y: 1.0 # Angular resolution in the Y direction (degrees)
       max_angle_width: 380.0     # Maximum angular width of the range image (degrees) //este parametro parece estar distorsionando la nube de puntos (interpolado se hace con proyección 2d)
-      max_angle_height: 360.0    # Maximum angular height of the range image (degrees
+      max_angle_height: 360.0    # Maximum angular height of the range image (degrees)
       min_ang_fov: 0.0      # Minimum angle for the field of view (degrees) [default is -90]
       max_ang_fov: 360.0       # Maximum angle for the field of view (degrees) [default is +90]
-    
+
     interpolation:
-      method: "linear"                   # Interpolation method (linear, nearest, bilateral, edgeAware, or spline)
+      method: "bilateral"                   # Interpolation method (linear, nearest, bilateral, edgeAware, or spline)
                                             # - "linear" uses bilinear interpolation to smoothly scale values.
                                             # - "nearest" uses nearest neighbor interpolation for simpler, faster calculations.
                                             # - "bilateral" uses bilateral interpolation for noise reduction while preserving edges.
