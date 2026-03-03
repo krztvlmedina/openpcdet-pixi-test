@@ -3,24 +3,35 @@
 #
 # Executes all steps sequentially and organises outputs under:
 #
-#   results/<TIMESTAMP>/
+#   <host>/../datos/output_runs/<TIMESTAMP>/    (= /OpenPCDet/output_runs/<TIMESTAMP>/ in openpcdet)
 #     raw_results/
-#       desempeno_offline/          ← batch detection evaluations + saved bboxes
-#         original/                 ← eval_all_original results
-#         downsampled/              ← eval_all_downsampled results
-#         interpolated/             ← eval_all_interpolated results (per config)
-#         detections/               ← save_detections.py output (per dataset/model)
-#       desempeno_online/           ← run_realtime_eval.sh output
+#       desempeno_offline/
+#         original/        ← eval results for original KITTI
+#         downsampled/     ← eval results for reduced-kitti
+#         interpolated/    ← eval results per interpolation config
+#         detections/      ← save_detections.py output (per dataset/model)
+#       desempeno_online/  ← run_realtime_eval.sh output
 #     latex/
-#       desempeno_offline/          ← AP + recall tables
-#       desempeno_online/           ← aggregated realtime results
+#       desempeno_offline/ ← AP + recall tables
+#       desempeno_online/  ← aggregated realtime results
 #
-# Prerequisites:
-#   • Docker containers ${CONTAINER_VELODYNE} and ${CONTAINER_OPENPCDET} running
-#     and sharing the same ROS2 DDS domain (same network)
-#   • KITTI original data mounted at ${OPC_DATA}/kitti  (images, calib, labels)
-#   • Pretrained models at ${OPC_DATA}/pretrained-models
-#   • Interpolation configs at ${VEL_INTERP_CONFIG_DIR} (velodyne container)
+# Container volume layout (from compose.yml):
+#
+#   velodyne_ros2 (CONTAINER_VELODYNE):
+#     ../datos/kitti/                          → /app/data/kitti
+#     ../datos/reduced-kitti/                  → /app/data/reduced-kitti
+#     <ext>/interpolated-kitti/                → /app/data/output/interpolated-kitti  (rw)
+#     ./data/config_files/interpolation/       → /app/data/config_files/interpolation/
+#     scripts baked into image                 → /app/packages/pointcloud_utils/scripts/
+#
+#   velodyne_openpcdet (CONTAINER_OPENPCDET):
+#     ../datos/kitti/training                  → /OpenPCDet/data/original-kitti/training
+#     ../datos/kitti/ImageSets                 → /OpenPCDet/data/original-kitti/ImageSets
+#     ../datos/reduced-kitti/                  → /OpenPCDet/data/reduced-kitti
+#     <ext>/interpolated-kitti/                → /OpenPCDet/data/interpolated-kitti  (ro)
+#     ../datos/pretrained-models/              → /OpenPCDet/data/pretrained-models
+#     ../datos/output_runs/                    → /OpenPCDet/output_runs
+#     ./src/lidar/                             → /OpenPCDet/src/lidar
 #
 # Usage:
 #   ./run_full_pipeline.sh [--skip-downsample] [--skip-interp] [--skip-offline]
@@ -32,30 +43,34 @@ set -euo pipefail
 CONTAINER_VELODYNE="${CONTAINER_VELODYNE:-velodyne_ros2}"
 CONTAINER_OPENPCDET="${CONTAINER_OPENPCDET:-velodyne_openpcdet}"
 
-# ─── Paths (inside each container) ───────────────────────────────────────────
-# openpcdet container
+# ─── Paths inside the velodyne container ─────────────────────────────────────
+VEL_SCRIPTS="/app/packages/pointcloud_utils/scripts"
+VEL_INTERP_CONFIG_DIR="/app/data/config_files/interpolation/final"
+VEL_KITTI_VELODYNE="/app/data/kitti/training/velodyne"
+VEL_KITTI_REDUCED="/app/data/reduced-kitti"
+VEL_KITTI_INTERP_BASE="/app/data/output/interpolated-kitti"   # read-write
+
+# ─── Paths inside the openpcdet container ────────────────────────────────────
 OPC_ROOT="/OpenPCDet"
 OPC_DATA="${OPC_ROOT}/data"
 OPC_TOOLS="${OPC_ROOT}/src/lidar/tools"
 OPC_BATCH="${OPC_TOOLS}/batch_evaluation"
-
-# velodyne container
-VEL_SCRIPTS="/app/packages/pointcloud_utils/scripts"
-VEL_INTERP_CONFIG_DIR="/app/data/config_files/interpolation/final"
-
-# Shared data paths (mounted in both containers)
-KITTI_ORIGINAL="${OPC_DATA}/kitti/training/velodyne"
-KITTI_REDUCED="${OPC_DATA}/reduced-kitti"
-KITTI_INTERP_BASE="${OPC_DATA}/interpolated-kitti"
+OPC_KITTI_DATA="${OPC_DATA}/original-kitti"
+OPC_KITTI_VELODYNE="${OPC_KITTI_DATA}/training/velodyne"
+OPC_KITTI_REDUCED="${OPC_DATA}/reduced-kitti"
+OPC_KITTI_INTERP_BASE="${OPC_DATA}/interpolated-kitti"         # read-only
+OPC_PRETRAINED="${OPC_DATA}/pretrained-models"
+OPC_RESULTS_BASE="${OPC_ROOT}/output_runs"
 
 # Minimum free space in GB required before starting
 MIN_FREE_GB=50
 SETTLE_TIME=5
 
-# ─── Result root (on host, also mounted in openpcdet container) ───────────────
+# ─── Result root ─────────────────────────────────────────────────────────────
+# Host path mirrors the ../datos/output_runs → /OpenPCDet/output_runs mount.
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-RESULTS_HOST="$(pwd)/results/${TIMESTAMP}"
-RESULTS_OPC="${OPC_ROOT}/results/${TIMESTAMP}"
+RESULTS_HOST="$(cd "$(dirname "$0")/.." && pwd)/datos/output_runs/${TIMESTAMP}"
+RESULTS_OPC="${OPC_RESULTS_BASE}/${TIMESTAMP}"
 
 OFFLINE_RAW="${RESULTS_OPC}/raw_results/desempeno_offline"
 ONLINE_RAW="${RESULTS_OPC}/raw_results/desempeno_online"
@@ -104,9 +119,9 @@ step() { echo; echo "═══════════════════�
 DEXEC_PID=""
 HOST_PIDS=()
 
-# Route background docker exec to the right container command prefix:
-#   velodyne   → pixi run
-#   openpcdet  → source ROS2 setup
+# Route background docker exec to the correct command prefix per container:
+#   velodyne   → pixi run (ROS2/Python managed by pixi)
+#   openpcdet  → source ROS2 humble setup
 dexec_bg() {
     local container="$1"; shift
     if [ "$container" = "$CONTAINER_VELODYNE" ]; then
@@ -124,6 +139,9 @@ kill_in_container() {
     docker exec "$container" bash -c "pkill -9 -f '${pattern}' 2>/dev/null || true" || true
 }
 
+# Both containers share network_mode:host and the same FastDDS domain,
+# so topics published in velodyne are visible from openpcdet and vice-versa.
+# We always check from openpcdet since it sources ROS2 directly (no pixi needed).
 wait_for_topic() {
     local container="$1"; local topic="$2"; local timeout="${3:-30}"; local elapsed=0
     echo "  Waiting for topic ${topic}..."
@@ -137,78 +155,91 @@ wait_for_topic() {
 }
 
 # ─── Step 0: Storage check ───────────────────────────────────────────────────
+# Check both mounts: openpcdet (eval outputs) and the external drive where
+# interpolated datasets are written (velodyne container, read-write mount).
 check_storage() {
     log "Checking available storage..."
-    local free_gb
-    free_gb=$(docker exec "${CONTAINER_OPENPCDET}" bash -c \
+
+    local opc_free
+    opc_free=$(docker exec "${CONTAINER_OPENPCDET}" bash -c \
         "df -BG '${OPC_DATA}' | awk 'NR==2{gsub(\"G\",\"\",\$4); print \$4}'")
-    log "Free space in ${OPC_DATA}: ${free_gb} GB (need ${MIN_FREE_GB} GB)"
-    if [[ "${free_gb}" -lt "${MIN_FREE_GB}" ]]; then
-        echo "ERROR: Insufficient storage. ${free_gb} GB free, ${MIN_FREE_GB} GB required." >&2
-        echo "Free up space or lower MIN_FREE_GB and retry." >&2
+    log "  [openpcdet] ${OPC_DATA}: ${opc_free} GB free"
+
+    local vel_free
+    vel_free=$(docker exec "${CONTAINER_VELODYNE}" bash -c \
+        "df -BG '${VEL_KITTI_INTERP_BASE}' | awk 'NR==2{gsub(\"G\",\"\",\$4); print \$4}'")
+    log "  [velodyne]  ${VEL_KITTI_INTERP_BASE}: ${vel_free} GB free"
+
+    log "  Minimum required: ${MIN_FREE_GB} GB in each location."
+    if [[ "${opc_free}" -lt "${MIN_FREE_GB}" ]]; then
+        echo "ERROR: Insufficient storage in openpcdet (${opc_free} GB < ${MIN_FREE_GB} GB)." >&2
+        exit 1
+    fi
+    if [[ "${vel_free}" -lt "${MIN_FREE_GB}" ]]; then
+        echo "ERROR: Insufficient storage on external drive (${vel_free} GB < ${MIN_FREE_GB} GB)." >&2
         exit 1
     fi
     log "Storage OK."
 }
 
 # ─── Step 1: Downsample KITTI 64→16 ─────────────────────────────────────────
-# Runs in openpcdet container (blocking); script path is mounted from velodyne app.
+# Runs in velodyne container: script is baked into the image, KITTI data and
+# reduced-kitti output are both mounted there.
 run_downsample() {
     step "Step 1: Downsampling KITTI 64-beam → 16-beam (VLP-16 simulation)"
     docker exec "${CONTAINER_VELODYNE}" bash -c \
-        "cd ${OPC_ROOT} && python3 ${VEL_SCRIPTS}/downsample_64_to_16.py \
-            ${KITTI_ORIGINAL} ${KITTI_REDUCED} --batch"
-    log "Downsampled dataset written to ${KITTI_REDUCED}"
+        "pixi run python3 ${VEL_SCRIPTS}/downsample_64_to_16.py \
+            ${VEL_KITTI_VELODYNE} ${VEL_KITTI_REDUCED} --batch"
+    log "Downsampled dataset written to ${VEL_KITTI_REDUCED}"
 }
 
 # ─── Step 2: Generate interpolated datasets ───────────────────────────────────
-# One interpolated dataset per config, using the same 3-node pattern as
-# run_evaluation() in run_realtime_eval.sh:
-#   1. pointcloud_interpolation_node  (velodyne, background)
-#   2. save_interpolated_clouds.py    (openpcdet, background — ROS2 subscriber)
-#   3. bin_publisher_node             (velodyne, background — plays all frames once)
+# All three nodes run in the velodyne container because:
+#   • The interpolated-kitti mount is read-only in openpcdet.
+#   • save_interpolated_clouds.py needs write access to VEL_KITTI_INTERP_BASE.
+#   • The script and the reduced-kitti input are both accessible in velodyne.
 run_one_interpolation() {
     local cfg_file="$1"
     local cfg_name="$2"
-    local out_velodyne="${KITTI_INTERP_BASE}/${cfg_name}/velodyne"
+    local out_dir="${VEL_KITTI_INTERP_BASE}/${cfg_name}/velodyne"
 
     echo "------------------------------------------------------------"
     echo " CONFIG: ${cfg_name}"
     echo "------------------------------------------------------------"
 
-    docker exec "${CONTAINER_OPENPCDET}" bash -c "mkdir -p '${out_velodyne}'"
+    docker exec "${CONTAINER_VELODYNE}" bash -c "mkdir -p '${out_dir}'"
 
-    # 1. Start interpolation node in velodyne container
+    # 1. Interpolation node (velodyne, background)
     dexec_bg "${CONTAINER_VELODYNE}" \
         "ros2 run dynamic_lidar_interpolation pointcloud_interpolation_node \
          --ros-args --params-file '${cfg_file}'"
     local interp_pid=${DEXEC_PID}; HOST_PIDS+=("${interp_pid}")
 
-    # 2. Wait for interpolated topic to be visible from openpcdet container,
-    #    then start the cloud saver (ROS2 subscriber + file writer)
+    # 2. Wait for the interpolated topic, then start the cloud saver (velodyne, background).
+    #    Checked from openpcdet since it sources ROS2 directly; topic is on the shared domain.
     wait_for_topic "${CONTAINER_OPENPCDET}" "interpolated_point_cloud" 30 || true
 
-    dexec_bg "${CONTAINER_OPENPCDET}" \
+    dexec_bg "${CONTAINER_VELODYNE}" \
         "python3 ${VEL_SCRIPTS}/save_interpolated_clouds.py \
-            --input-dir  ${KITTI_REDUCED} \
-            --output-dir ${out_velodyne} \
+            --input-dir  ${VEL_KITTI_REDUCED} \
+            --output-dir ${out_dir} \
             --topic      interpolated_point_cloud \
             --timeout    60"
     local saver_pid=${DEXEC_PID}; HOST_PIDS+=("${saver_pid}")
 
-    # 3. Publish reduced frames at 5 Hz, no loop (publisher exits when done)
+    # 3. Publish reduced frames once at 5 Hz (velodyne, background)
     dexec_bg "${CONTAINER_VELODYNE}" \
         "ros2 run pointcloud_utils bin_publisher_node \
-         --ros-args -p bin_directory:=${KITTI_REDUCED} \
+         --ros-args -p bin_directory:=${VEL_KITTI_REDUCED} \
                     -p publish_rate:=5.0 \
                     -p loop:=false \
                     -p topic:=velodyne_points"
     local publisher_pid=${DEXEC_PID}; HOST_PIDS+=("${publisher_pid}")
 
-    # Wait for cloud saver to finish (exits via rclpy.shutdown() after all frames saved)
+    # Wait for saver to finish (it calls rclpy.shutdown() after all frames are saved)
     local total_frames
-    total_frames=$(docker exec "${CONTAINER_OPENPCDET}" bash -c \
-        "ls '${KITTI_REDUCED}'/*.bin 2>/dev/null | wc -l" || echo "0")
+    total_frames=$(docker exec "${CONTAINER_VELODYNE}" bash -c \
+        "ls '${VEL_KITTI_REDUCED}'/*.bin 2>/dev/null | wc -l" || echo "0")
     local timeout_sec=$(( total_frames + 120 ))
     local waited=0
     echo "  Saving interpolated frames (expecting ~${total_frames})..."
@@ -225,9 +256,9 @@ run_one_interpolation() {
             kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
         done
     } 2>/dev/null
-    kill_in_container "${CONTAINER_VELODYNE}"  "pointcloud_interpolation_node"
-    kill_in_container "${CONTAINER_VELODYNE}"  "bin_publisher_node"
-    kill_in_container "${CONTAINER_OPENPCDET}" "save_interpolated_clouds"
+    kill_in_container "${CONTAINER_VELODYNE}" "pointcloud_interpolation_node"
+    kill_in_container "${CONTAINER_VELODYNE}" "bin_publisher_node"
+    kill_in_container "${CONTAINER_VELODYNE}" "save_interpolated_clouds"
 
     HOST_PIDS=()
     log "  Cooling down (${SETTLE_TIME}s)..."
@@ -257,8 +288,9 @@ run_interpolation() {
 }
 
 # ─── Step 3: Offline batch evaluations ───────────────────────────────────────
-# All evaluation runs are blocking (no ROS2 nodes, pure GPU inference).
-# Runs in openpcdet container.
+# Runs in openpcdet container (GPU inference, model configs in src/lidar).
+# Original KITTI is at /OpenPCDet/data/original-kitti/ (not /data/kitti/).
+# Interpolated is read-only at /OpenPCDet/data/interpolated-kitti/ — fine for reading.
 run_batch_eval() {
     # Args: cfg_subdir  data_root  img_root  lidar_root  dest_dir  dataset_label
     local cfg_subdir="$1" data_root="$2" img_root="$3" lidar_root="$4" dest_dir="$5"
@@ -278,8 +310,7 @@ run_batch_eval() {
                 --lidar-root '${lidar_root}' \
                 --cfg_file ${OPC_TOOLS}/cfgs/kitti_models/${cfg_subdir}/${CFG} \
                 --batch_size 1 \
-                --ckpt ${OPC_DATA}/pretrained-models/${CKPT}"
-        # Move output from OpenPCDet's default location to results directory
+                --ckpt ${OPC_PRETRAINED}/${CKPT}"
         local src="${OPC_ROOT}/output/src/lidar/tools/cfgs/kitti_models/${cfg_subdir}/${MODEL}"
         docker exec "${CONTAINER_OPENPCDET}" bash -c \
             "mkdir -p '${dest_dir}/${dataset_label}' && \
@@ -295,44 +326,45 @@ run_offline_evals() {
 
     log "--- Original KITTI ---"
     run_batch_eval "original" \
-        "${OPC_DATA}/kitti" "${KITTI_ORIGINAL}" "${KITTI_ORIGINAL}" \
+        "${OPC_KITTI_DATA}" "${OPC_KITTI_VELODYNE}" "${OPC_KITTI_VELODYNE}" \
         "${OFFLINE_RAW}/original" "kitti"
 
     log "--- Downsampled (reduced-kitti) ---"
     run_batch_eval "downsampled" \
-        "${KITTI_REDUCED}" "${KITTI_REDUCED}" "${KITTI_REDUCED}" \
+        "${OPC_KITTI_REDUCED}" "${OPC_KITTI_REDUCED}" "${OPC_KITTI_REDUCED}" \
         "${OFFLINE_RAW}/downsampled" "reduced"
 
     log "--- Interpolated datasets ---"
     local configs
     configs=$(docker exec "${CONTAINER_OPENPCDET}" bash -c \
-        "ls '${KITTI_INTERP_BASE}' 2>/dev/null | sort" || true)
+        "ls '${OPC_KITTI_INTERP_BASE}' 2>/dev/null | sort" || true)
     while IFS= read -r cfg_name; do
         [[ -z "${cfg_name}" ]] && continue
         [[ -n "${SINGLE_CONFIG}" && "${cfg_name}" != "${SINGLE_CONFIG}" ]] && continue
-        local lidar_root="${KITTI_INTERP_BASE}/${cfg_name}/velodyne"
+        local lidar_root="${OPC_KITTI_INTERP_BASE}/${cfg_name}/velodyne"
         log "  Interpolated config: ${cfg_name}"
         run_batch_eval "interpolated" \
-            "${KITTI_INTERP_BASE}" "${KITTI_INTERP_BASE}" "${lidar_root}" \
+            "${OPC_KITTI_INTERP_BASE}" "${OPC_KITTI_INTERP_BASE}" "${lidar_root}" \
             "${OFFLINE_RAW}/interpolated" "${cfg_name}"
     done <<< "${configs}"
 }
 
 # ─── Step 4: Save per-frame detection bboxes ─────────────────────────────────
-# Runs in openpcdet container (blocking, no ROS2).
+# Runs in openpcdet container (GPU inference, save_detections.py in src/lidar).
+# All input data is readable from openpcdet (interpolated-kitti is ro, fine for reads).
 run_save_detections() {
     step "Step 4: Saving per-frame detection results (kitti_inspector compatible)"
     docker exec "${CONTAINER_OPENPCDET}" bash -c "mkdir -p '${OFFLINE_RAW}/detections'"
 
-    local datasets=("original:${KITTI_ORIGINAL}" "downsampled:${KITTI_REDUCED}")
+    local datasets=("original:${OPC_KITTI_VELODYNE}" "downsampled:${OPC_KITTI_REDUCED}")
 
     local configs
     configs=$(docker exec "${CONTAINER_OPENPCDET}" bash -c \
-        "ls '${KITTI_INTERP_BASE}' 2>/dev/null | sort" || true)
+        "ls '${OPC_KITTI_INTERP_BASE}' 2>/dev/null | sort" || true)
     while IFS= read -r cfg_name; do
         [[ -z "${cfg_name}" ]] && continue
         [[ -n "${SINGLE_CONFIG}" && "${cfg_name}" != "${SINGLE_CONFIG}" ]] && continue
-        datasets+=("interp_${cfg_name}:${KITTI_INTERP_BASE}/${cfg_name}/velodyne")
+        datasets+=("interp_${cfg_name}:${OPC_KITTI_INTERP_BASE}/${cfg_name}/velodyne")
     done <<< "${configs}"
 
     for entry in "${datasets[@]}"; do
@@ -348,7 +380,7 @@ run_save_detections() {
                 "cd ${OPC_ROOT} && \
                  python3 ${OPC_BATCH}/save_detections.py \
                     --cfg_file  ${OPC_TOOLS}/cfgs/kitti_models/${CFG} \
-                    --ckpt      ${OPC_DATA}/pretrained-models/${CKPT} \
+                    --ckpt      ${OPC_PRETRAINED}/${CKPT} \
                     --bin-dir   '${bin_dir}' \
                     --output-dir '${out}'" || \
             log "  WARNING: save_detections failed for ${label}/${MODEL}"
@@ -357,7 +389,9 @@ run_save_detections() {
 }
 
 # ─── Step 5: Online (real-time) evaluation ────────────────────────────────────
-# Delegates to run_realtime_eval.sh which manages its own container orchestration.
+# Delegates to run_realtime_eval.sh, which handles its own container orchestration.
+# --data-path must be the velodyne-container path for reduced-kitti, since
+# run_realtime_eval.sh runs the bin_publisher_node inside the velodyne container.
 run_online_eval() {
     step "Step 5: Online (real-time) evaluation"
     docker exec "${CONTAINER_OPENPCDET}" bash -c "mkdir -p '${ONLINE_RAW}'"
@@ -367,7 +401,7 @@ run_online_eval() {
                 --max-frames ${MAX_FRAMES} \
                 --warmup ${WARMUP_FRAMES} \
                 --data-type bin \
-                --data-path ${KITTI_REDUCED}"
+                --data-path ${VEL_KITTI_REDUCED}"
     [[ -n "${SINGLE_MODEL}"  ]] && args+=" --model ${SINGLE_MODEL}"
     [[ -n "${SINGLE_CONFIG}" ]] && args+=" --config ${SINGLE_CONFIG}"
 
@@ -375,13 +409,12 @@ run_online_eval() {
 }
 
 # ─── Step 6: Generate LaTeX tables ───────────────────────────────────────────
-# All LaTeX generation runs in openpcdet container (blocking Python scripts).
+# All LaTeX generation runs in openpcdet container (Python scripts in src/lidar).
 run_latex() {
     step "Step 6: Generating LaTeX tables"
     docker exec "${CONTAINER_OPENPCDET}" bash -c \
         "mkdir -p '${OFFLINE_LATEX}' '${ONLINE_LATEX}'"
 
-    # Offline: one table per single-dataset variant
     for variant in original downsampled; do
         local src="${OFFLINE_RAW}/${variant}"
         docker exec "${CONTAINER_OPENPCDET}" bash -c \
@@ -390,13 +423,11 @@ run_latex() {
              mv '${src}/latex/'*.tex '${OFFLINE_LATEX}/' 2>/dev/null || true"
     done
 
-    # Offline: interpolated multi-dataset comparison table
     docker exec "${CONTAINER_OPENPCDET}" bash -c \
         "cd ${OPC_ROOT} && \
          python3 ${OPC_BATCH}/generate_latex_tables.py '${OFFLINE_RAW}/interpolated' && \
          mv '${OFFLINE_RAW}/interpolated/latex/'*.tex '${OFFLINE_LATEX}/' 2>/dev/null || true"
 
-    # Online: aggregate CSV results
     docker exec "${CONTAINER_OPENPCDET}" bash -c \
         "cd ${OPC_ROOT} && \
          python3 ${OPC_TOOLS}/perf_evaluation/aggregate_realtime_results.py '${ONLINE_RAW}' && \
