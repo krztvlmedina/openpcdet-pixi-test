@@ -127,7 +127,7 @@ def main():
         workspace=args.workspace.resolve(),
     )
 
-    cmd = ["python3", str(OPCDET_TEST_SCRIPT)] + passthrough
+    cmd = ["python3", str(OPCDET_TEST_SCRIPT), "--save_to_file"] + passthrough
 
     print("▶ Executing OpenPCDet test:")
     print(" ", " ".join(cmd))

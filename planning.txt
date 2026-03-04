@@ -40,3 +40,6 @@ PCLs a revisar:
 for i in $(seq -f "%06g" 4000 5000); do
     sudo rm -f "${i}.bin"
 done
+
+
+-Aclarar si modelos agrupan truck, van, car, etc en car o si son ignorados
