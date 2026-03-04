@@ -67,6 +67,13 @@
 #                          [--skip-offline] [--skip-online]
 #                          [--single-model M] [--single-config C]
 #                          [--rate HZ] [--max-frames N]
+#                          [--output-dir NAME]
+#
+# --output-dir NAME
+#   Use <output_runs>/NAME as the result directory instead of a new timestamp
+#   subfolder.  Useful for resuming an interrupted run or aggregating partial
+#   re-runs: existing result files are left in place and only missing ones are
+#   (re)generated.
 set -euo pipefail
 
 # ─── Containers ──────────────────────────────────────────────────────────────
@@ -104,17 +111,6 @@ OPC_CFG_REDUCED="src/lidar/tools/cfgs/dataset_configs/create_dataset_info_downsa
 # Minimum free space in GB required before starting
 MIN_FREE_GB=50
 
-# ─── Result root ─────────────────────────────────────────────────────────────
-# Host path mirrors the ../datos/output_runs → /OpenPCDet/output_runs mount.
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-RESULTS_HOST="$(cd "$(dirname "$0")/.." && pwd)/datos/output_runs/${TIMESTAMP}"
-RESULTS_OPC="${OPC_RESULTS_BASE}/${TIMESTAMP}"
-
-OFFLINE_RAW="${RESULTS_OPC}/raw_results/desempeno_offline"
-ONLINE_RAW="${RESULTS_OPC}/raw_results/desempeno_online"
-OFFLINE_LATEX="${RESULTS_OPC}/latex/desempeno_offline"
-ONLINE_LATEX="${RESULTS_OPC}/latex/desempeno_online"
-
 # ─── CLI flags ────────────────────────────────────────────────────────────────
 SKIP_DOWNSAMPLE=false
 SKIP_INFOS=false
@@ -123,6 +119,7 @@ SKIP_OFFLINE=false
 SKIP_ONLINE=false
 SINGLE_MODEL=""
 SINGLE_CONFIG=""
+OUTPUT_DIR=""
 PUBLISH_RATE=10.0
 MAX_FRAMES=500
 WARMUP_FRAMES=10
@@ -136,11 +133,26 @@ while [[ $# -gt 0 ]]; do
         --skip-online)     SKIP_ONLINE=true;     shift ;;
         --single-model)    SINGLE_MODEL="$2";    shift 2 ;;
         --single-config)   SINGLE_CONFIG="$2";   shift 2 ;;
+        --output-dir)      OUTPUT_DIR="$2";      shift 2 ;;
         --rate)            PUBLISH_RATE="$2";    shift 2 ;;
         --max-frames)      MAX_FRAMES="$2";      shift 2 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
+
+# ─── Result root ─────────────────────────────────────────────────────────────
+# Host path mirrors the ../datos/output_runs → /OpenPCDet/output_runs mount.
+# If --output-dir is given, use that name directly so partial/interrupted runs
+# can be resumed in the same directory.  Otherwise fall back to a timestamp.
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+RESULTS_SUBDIR="${OUTPUT_DIR:-${TIMESTAMP}}"
+RESULTS_HOST="$(cd "$(dirname "$0")/.." && pwd)/datos/output_runs/${RESULTS_SUBDIR}"
+RESULTS_OPC="${OPC_RESULTS_BASE}/${RESULTS_SUBDIR}"
+
+OFFLINE_RAW="${RESULTS_OPC}/raw_results/desempeno_offline"
+ONLINE_RAW="${RESULTS_OPC}/raw_results/desempeno_online"
+OFFLINE_LATEX="${RESULTS_OPC}/latex/desempeno_offline"
+ONLINE_LATEX="${RESULTS_OPC}/latex/desempeno_online"
 
 # ─── Models ──────────────────────────────────────────────────────────────────
 declare -A MODELS
@@ -419,10 +431,20 @@ run_batch_eval() {
                 --cfg_file ${OPC_TOOLS}/cfgs/kitti_models/${cfg_subdir}/${CFG} \
                 --batch_size 1 \
                 --ckpt ${OPC_PRETRAINED}/${CKPT}"
-        local src="${OPC_ROOT}/output/src/lidar/tools/cfgs/kitti_models/${cfg_subdir}/${MODEL}"
+        # OpenPCDet derives EXP_GROUP_PATH from parts[-2] of the cfg_file path
+        # (the immediate parent dir name, e.g. "original", "downsampled",
+        # "interpolated") and TAG from the file stem.  Output is therefore at:
+        #   <ROOT>/output/<cfg_subdir>/<model_stem>/
+        local src="${OPC_ROOT}/output/${cfg_subdir}/${MODEL}"
+        local dst="${dest_dir}/${dataset_label}/${MODEL}"
         docker exec "${CONTAINER_OPENPCDET}" bash -c \
             "mkdir -p '${dest_dir}/${dataset_label}' && \
-             mv '${src}' '${dest_dir}/${dataset_label}/${MODEL}' 2>/dev/null || true"
+             rm -rf '${dst}' && \
+             if mv '${src}' '${dst}'; then \
+                 echo '  Moved: ${src} → ${dst}'; \
+             else \
+                 echo 'WARNING: could not move ${src} — results remain there'; \
+             fi"
     done
 }
 
