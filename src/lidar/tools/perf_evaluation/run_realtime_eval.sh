@@ -13,12 +13,16 @@ OPC_TOOLS="${OPC_ROOT}/src/lidar/tools"
 OPC_MODELS_DIR="${OPC_ROOT}/data/pretrained-models"
 
 # ─── Defaults ─────────────────────────────────────────────────────────────
-OUTPUT_BASE="/OpenPCDet/output/perf_results"
+# OUTPUT_BASE is in the mounted output_runs volume so results persist across
+# container restarts.  Override with --output-dir when called from the pipeline.
+OUTPUT_BASE="/OpenPCDet/output_runs/realtime_eval"
 WARMUP_FRAMES=10
 MAX_FRAMES=500
 PUBLISH_RATE=10.0
-SINGLE_MODEL="pointrcnn_iou"
-SINGLE_CONFIG="nearest_extreme"
+# Empty = run all models / all interpolation configs (the safe default for both
+# standalone and pipeline use).  Pass --model / --config to restrict to one.
+SINGLE_MODEL=""
+SINGLE_CONFIG=""
 SETTLE_TIME=5
 POINTCLOUD_TOPIC="interpolated_point_cloud"
 DATA_TYPE="auto"
@@ -162,7 +166,7 @@ for CONFIG_NAME in $(printf '%s\n' "${!INTERP_CONFIGS[@]}" | sort); do
         current_run=$((current_run + 1))
         echo "=== [${current_run}/${total_runs}] Running Pipeline ==="
         read -r CFG CKPT <<< "${MODELS[$MODEL]}"
-        run_evaluation "${CONFIG_NAME}" "${INTERP_CONFIGS[${CONFIG_NAME}]}" "${MODEL}" "src/lidar/tools/cfgs/kitti_models/interpolated/${CFG}" "data/pretrained-models/${CKPT}"
+        run_evaluation "${CONFIG_NAME}" "${INTERP_CONFIGS[${CONFIG_NAME}]}" "${MODEL}" "${OPC_TOOLS}/cfgs/kitti_models/interpolated/${CFG}" "${OPC_MODELS_DIR}/${CKPT}"
     done
 done
 
