@@ -6,10 +6,9 @@
 #   <host>/../datos/output_runs/<TIMESTAMP>/    (= /OpenPCDet/output_runs/<TIMESTAMP>/ in openpcdet)
 #     raw_results/
 #       desempeno_offline/
-#         original/        ← eval results for original KITTI
-#         downsampled/     ← eval results for reduced-kitti
-#         interpolated/    ← eval results per interpolation config
-#         detections/      ← save_detections.py output (per dataset/model)
+#         original/        ← eval results for original KITTI (AP tables + final_result/data/)
+#         downsampled/     ← eval results for reduced-kitti  (AP tables + final_result/data/)
+#         interpolated/    ← eval results per interpolation config (AP tables + final_result/data/)
 #       desempeno_online/  ← run_realtime_eval.sh output
 #     latex/
 #       desempeno_offline/ ← AP + recall tables
@@ -98,7 +97,6 @@ OPC_KITTI_DATA="${OPC_DATA}/original-kitti"
 OPC_KITTI_VELODYNE="${OPC_KITTI_DATA}/training/velodyne"   # original 64-beam bins
 
 OPC_KITTI_REDUCED="${OPC_DATA}/reduced-kitti"
-OPC_KITTI_REDUCED_VELODYNE="${OPC_KITTI_REDUCED}/training/velodyne"  # downsampled bins
 
 OPC_KITTI_INTERP_BASE="${OPC_DATA}/interpolated-kitti"     # read-only
 OPC_PRETRAINED="${OPC_DATA}/pretrained-models"
@@ -430,7 +428,8 @@ run_batch_eval() {
                 --lidar-root     '${lidar_root}' \
                 --cfg_file ${OPC_TOOLS}/cfgs/kitti_models/${cfg_subdir}/${CFG} \
                 --batch_size 1 \
-                --ckpt ${OPC_PRETRAINED}/${CKPT}"
+                --ckpt ${OPC_PRETRAINED}/${CKPT} \
+                --save_to_file"
         # OpenPCDet derives EXP_GROUP_PATH from parts[-2] of the cfg_file path
         # (the immediate parent dir name, e.g. "original", "downsampled",
         # "interpolated") and TAG from the file stem.  Output is therefore at:
@@ -451,8 +450,7 @@ run_batch_eval() {
 run_offline_evals() {
     step "Step 4: Offline batch evaluations"
     docker exec "${CONTAINER_OPENPCDET}" bash -c \
-        "mkdir -p '${OFFLINE_RAW}/original' '${OFFLINE_RAW}/downsampled' \
-                   '${OFFLINE_RAW}/interpolated'"
+        "mkdir -p '${OFFLINE_RAW}/original' '${OFFLINE_RAW}/downsampled' '${OFFLINE_RAW}/interpolated'"
 
     # Original KITTI: data_root = imageset_root = lidar_root = OPC_KITTI_DATA
     log "--- Original KITTI ---"
@@ -486,53 +484,12 @@ run_offline_evals() {
     done <<< "${configs}"
 }
 
-# ─── Step 5: Save per-frame detection bboxes ─────────────────────────────────
-# save_detections.py --bin-dir takes the directory of .bin files directly.
-run_save_detections() {
-    step "Step 5: Saving per-frame detection results (kitti_inspector compatible)"
-    docker exec "${CONTAINER_OPENPCDET}" bash -c "mkdir -p '${OFFLINE_RAW}/detections'"
-
-    local datasets=(
-        "original:${OPC_KITTI_VELODYNE}"
-        "downsampled:${OPC_KITTI_REDUCED_VELODYNE}"
-    )
-
-    local configs
-    configs=$(docker exec "${CONTAINER_OPENPCDET}" bash -c \
-        "ls '${OPC_KITTI_INTERP_BASE}' 2>/dev/null | sort" || true)
-    while IFS= read -r cfg_name; do
-        [[ -z "${cfg_name}" ]] && continue
-        [[ -n "${SINGLE_CONFIG}" && "${cfg_name}" != "${SINGLE_CONFIG}" ]] && continue
-        datasets+=("interp_${cfg_name}:${OPC_KITTI_INTERP_BASE}/${cfg_name}/training/velodyne")
-    done <<< "${configs}"
-
-    for entry in "${datasets[@]}"; do
-        local label="${entry%%:*}"
-        local bin_dir="${entry#*:}"
-
-        for MODEL in $(printf '%s\n' "${!MODELS[@]}" | sort); do
-            [[ -n "${SINGLE_MODEL}" && "${MODEL}" != "${SINGLE_MODEL}" ]] && continue
-            read -r CFG CKPT <<< "${MODELS[$MODEL]}"
-            local out="${OFFLINE_RAW}/detections/${label}/${MODEL}"
-            log "  save_detections: ${label} / ${MODEL}"
-            docker exec "${CONTAINER_OPENPCDET}" bash -c \
-                "cd ${OPC_ROOT} && \
-                 python3 ${OPC_BATCH}/save_detections.py \
-                    --cfg_file  ${OPC_TOOLS}/cfgs/kitti_models/${CFG} \
-                    --ckpt      ${OPC_PRETRAINED}/${CKPT} \
-                    --bin-dir   '${bin_dir}' \
-                    --output-dir '${out}'" || \
-            log "  WARNING: save_detections failed for ${label}/${MODEL}"
-        done
-    done
-}
-
-# ─── Step 6: Online (real-time) evaluation ────────────────────────────────────
+# ─── Step 5: Online (real-time) evaluation ────────────────────────────────────
 # Delegates to run_realtime_eval.sh, which handles its own container orchestration.
 # --data-path must be the velodyne-container path to the .bin files (the velodyne
 # subdirectory, since run_realtime_eval.sh passes it directly to bin_publisher_node).
 run_online_eval() {
-    step "Step 6: Online (real-time) evaluation"
+    step "Step 5: Online (real-time) evaluation"
     docker exec "${CONTAINER_OPENPCDET}" bash -c "mkdir -p '${ONLINE_RAW}'"
 
     local args="--output-dir ${ONLINE_RAW} \
@@ -547,9 +504,9 @@ run_online_eval() {
     bash "$(dirname "$0")/src/lidar/tools/perf_evaluation/run_realtime_eval.sh" ${args}
 }
 
-# ─── Step 7: Generate LaTeX tables ───────────────────────────────────────────
+# ─── Step 6: Generate LaTeX tables ───────────────────────────────────────────
 run_latex() {
-    step "Step 7: Generating LaTeX tables"
+    step "Step 6: Generating LaTeX tables"
     docker exec "${CONTAINER_OPENPCDET}" bash -c \
         "mkdir -p '${OFFLINE_LATEX}' '${ONLINE_LATEX}'"
 
@@ -585,7 +542,7 @@ docker exec "${CONTAINER_OPENPCDET}" bash -c \
 ${SKIP_DOWNSAMPLE} || run_downsample
 ${SKIP_INFOS}      || run_kitti_infos
 ${SKIP_INTERP}     || run_interpolation
-${SKIP_OFFLINE}    || { run_offline_evals; run_save_detections; }
+${SKIP_OFFLINE}    || run_offline_evals
 ${SKIP_ONLINE}     || run_online_eval
 run_latex
 
