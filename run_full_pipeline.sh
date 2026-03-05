@@ -92,6 +92,7 @@ OPC_ROOT="/OpenPCDet"
 OPC_DATA="${OPC_ROOT}/data"
 OPC_TOOLS="${OPC_ROOT}/src/lidar/tools"
 OPC_BATCH="${OPC_TOOLS}/batch_evaluation"
+OPC_THRESHOLD_CONFIG="${OPC_TOOLS}/cfgs/kitti_score_thresholds.yaml"
 
 OPC_KITTI_DATA="${OPC_DATA}/original-kitti"
 OPC_KITTI_VELODYNE="${OPC_KITTI_DATA}/training/velodyne"   # original 64-beam bins
@@ -504,9 +505,46 @@ run_online_eval() {
     bash "$(dirname "$0")/src/lidar/tools/perf_evaluation/run_realtime_eval.sh" ${args}
 }
 
-# ─── Step 6: Generate LaTeX tables ───────────────────────────────────────────
+# ─── Step 6: Generate LaTeX tables + annotated images ────────────────────────
+# Annotated images are written to:
+#   <RESULTS_OPC>/annotated/<variant>/<dataset_label>/<MODEL>/
+#     gt_only/          — ground-truth 2D boxes
+#     det_only/         — all detection boxes
+#     det_thresholded/  — detections filtered by per-class score thresholds
+#
+# All variants share GT labels/images from original-kitti (reduced and
+# interpolated datasets have the same labels, only different velodyne scans).
+run_annotated_images() {
+    local variant="$1"    # e.g. "original", "downsampled", "interpolated"
+    local dataset_label="$2"  # e.g. "kitti", "reduced", "nearest_01"
+    local image_dir="${OPC_KITTI_DATA}/training/image_2"
+    local label_dir="${OPC_KITTI_DATA}/training/label_2"
+    local annotated_root="${RESULTS_OPC}/annotated/${variant}/${dataset_label}"
+
+    for MODEL in $(printf '%s\n' "${!MODELS[@]}" | sort); do
+        [[ -n "${SINGLE_MODEL}" && "${MODEL}" != "${SINGLE_MODEL}" ]] && continue
+        local det_dir="${OFFLINE_RAW}/${variant}/${dataset_label}/${MODEL}/final_result/data"
+        local out_dir="${annotated_root}/${MODEL}"
+
+        # Skip if detection results don't exist for this model
+        local has_dets
+        has_dets=$(docker exec "${CONTAINER_OPENPCDET}" bash -c \
+            "[ -d '${det_dir}' ] && echo yes || echo no")
+        [[ "${has_dets}" != "yes" ]] && continue
+
+        log "  Annotating images: ${variant}/${dataset_label}/${MODEL}"
+        docker exec "${CONTAINER_OPENPCDET}" bash -c \
+            "python3 ${OPC_BATCH}/generate_annotated_images.py \
+                --image-dir '${image_dir}' \
+                --label-dir '${label_dir}' \
+                --det-dir   '${det_dir}' \
+                --output-dir '${out_dir}' \
+                --threshold-config '${OPC_THRESHOLD_CONFIG}'"
+    done
+}
+
 run_latex() {
-    step "Step 6: Generating LaTeX tables"
+    step "Step 6: Generating LaTeX tables and annotated images"
     docker exec "${CONTAINER_OPENPCDET}" bash -c \
         "mkdir -p '${OFFLINE_LATEX}' '${ONLINE_LATEX}'"
 
@@ -527,6 +565,23 @@ run_latex() {
         "cd ${OPC_ROOT} && \
          python3 ${OPC_TOOLS}/perf_evaluation/aggregate_realtime_results.py '${ONLINE_RAW}' && \
          cp '${ONLINE_RAW}/'*.csv '${ONLINE_LATEX}/' 2>/dev/null || true"
+
+    # Annotated images (skip if offline eval was skipped)
+    if ! ${SKIP_OFFLINE}; then
+        log "Generating annotated images..."
+        run_annotated_images "original"    "kitti"
+        run_annotated_images "downsampled" "reduced"
+
+        local interp_configs
+        interp_configs=$(docker exec "${CONTAINER_OPENPCDET}" bash -c \
+            "ls '${OPC_KITTI_INTERP_BASE}' 2>/dev/null | sort" || true)
+        while IFS= read -r cfg_name; do
+            [[ -z "${cfg_name}" ]] && continue
+            [[ -n "${SINGLE_CONFIG}" && "${cfg_name}" != "${SINGLE_CONFIG}" ]] && continue
+            run_annotated_images "interpolated" "${cfg_name}"
+        done <<< "${interp_configs}"
+        log "Annotated images written to ${RESULTS_OPC}/annotated/"
+    fi
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────

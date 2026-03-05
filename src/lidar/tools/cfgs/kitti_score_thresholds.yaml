@@ -1,0 +1,6 @@
+# Per-class confidence score thresholds matching the OpenPCDet evaluation protocol.
+# Used to filter detection results for the det_thresholded/ image variant and
+# for 3D marker display in kitti_inspector.py (--threshold-config).
+Car: 0.7
+Pedestrian: 0.5
+Cyclist: 0.5

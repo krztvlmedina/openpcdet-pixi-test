@@ -3,10 +3,13 @@
 kitti_inspector.py — Interactive KITTI point cloud inspector for RViz.
 
 Publishes up to three point clouds (original / reduced / one interpolated at a
-time), ground-truth + pre-computed detection bounding boxes, and an annotated
+time), ground-truth + pre-computed detection bounding boxes, and a pre-generated
 camera image for a selected KITTI frame.  Multiple interpolation datasets and
 multiple pre-computed detection sets can be loaded simultaneously and cycled
 through interactively.
+
+Images are expected to be pre-generated (e.g. by generate_annotated_images.py)
+and are published as-is — no drawing is done at runtime.
 
 Topics published:
   /cloud/original          sensor_msgs/PointCloud2  (if --original-dir given)
@@ -15,6 +18,13 @@ Topics published:
   /markers/groundtruth     visualization_msgs/MarkerArray
   /markers/detections      visualization_msgs/MarkerArray  (loaded from txt)
   /image/annotated         sensor_msgs/Image         (if --image-dir given)
+
+3D detection markers are filtered by per-class confidence thresholds when
+--threshold-config is provided.  The threshold config is a YAML file of the
+form:
+  Car: 0.5
+  Pedestrian: 0.5
+  Cyclist: 0.5
 
 Interactive commands:
   n / <Enter>   next frame
@@ -35,7 +45,8 @@ Usage example:
       --interp-dir linear_01       /data/kitti/training/velodyne_linear_01 \\
       --label-dir   /data/kitti/training/label_2 \\
       --calib-dir   /data/kitti/training/calib \\
-      --image-dir   /data/kitti/training/image_2 \\
+      --image-dir   /path/to/annotated_images/det_thresholded \\
+      --threshold-config /path/to/thresholds.yaml \\
       --det-dir "pv_rcnn / nearest_extreme"  /path/to/pv_rcnn/nearest_extreme/final_result/data \\
       --det-dir "pointpillar / nearest_extreme" /path/to/pointpillar/nearest_extreme/final_result/data
 """
@@ -59,6 +70,12 @@ try:
     _CV2_AVAILABLE = True
 except ImportError:
     _CV2_AVAILABLE = False
+
+try:
+    import yaml as _yaml
+    _YAML_AVAILABLE = True
+except ImportError:
+    _YAML_AVAILABLE = False
 
 
 # ─── Per-class box colours (RGB 0–1) ─────────────────────────────────────────
@@ -310,6 +327,17 @@ class InspectorNode(Node):
         self._calib_dir = Path(args.calib_dir) if args.calib_dir else None
         self._image_dir = Path(args.image_dir) if args.image_dir else None
 
+        # Per-class confidence thresholds for 3D marker display
+        self._thresholds: Dict[str, float] = {}
+        if args.threshold_config:
+            if not _YAML_AVAILABLE:
+                import sys
+                print('WARNING: --threshold-config given but PyYAML is not installed; '
+                      'thresholds will not be applied.', file=sys.stderr)
+            else:
+                with open(args.threshold_config) as _f:
+                    self._thresholds = _yaml.safe_load(_f) or {}
+
         self._frames = self._collect_frames()
         if not self._frames:
             self.get_logger().error('No .bin files found in any input directory.')
@@ -349,6 +377,11 @@ class InspectorNode(Node):
             self.get_logger().warn('--image-dir given but cv2 is not available; '
                                    'image publishing disabled.')
             self._img_pub = None
+
+        if self._thresholds:
+            self.get_logger().info(
+                'Detection thresholds: '
+                + ', '.join(f'{k}={v}' for k, v in sorted(self._thresholds.items())))
 
         self.publish_current()
 
@@ -432,9 +465,17 @@ class InspectorNode(Node):
                         if cp.exists():
                             calib = KittiCalib(cp)
                     det_boxes = load_det_boxes(det_txt, calib)
-                    if det_boxes:
+                    # Apply per-class confidence thresholds for 3D display
+                    display_det = det_boxes
+                    if self._thresholds:
+                        display_det = [
+                            b for b in det_boxes
+                            if b.get('score', 1.0) >= self._thresholds.get(
+                                b.get('type', ''), 0.0)
+                        ]
+                    if display_det:
                         self._det_pub.publish(
-                            boxes_to_marker_array(det_boxes, self.frame_id, stamp,
+                            boxes_to_marker_array(display_det, self.frame_id, stamp,
                                                   'det', _DET_COLOR, _DEFAULT_DET_COLOR,
                                                   fill_alpha=0.40))
                     else:
@@ -445,8 +486,8 @@ class InspectorNode(Node):
                 self._det_pub.publish(_deleteall_ma('det', self.frame_id, stamp))
             det_label = f'{label} [{self._det_idx + 1}/{len(self._det_sets)}]'
 
-        # Annotated camera image
-        self._publish_image(fid, stamp, gt_boxes, det_boxes)
+        # Pre-generated camera image
+        self._publish_image(fid, stamp)
 
         print(f'  Frame [{self._idx + 1}/{len(self._frames)}]  id={fid}\n'
               f'    interp: {interp_label}\n'
@@ -455,8 +496,8 @@ class InspectorNode(Node):
 
     # ── Camera image ──────────────────────────────────────────────────────────
 
-    def _publish_image(self, fid: str, stamp,
-                       gt_boxes: List[Dict], det_boxes: List[Dict]) -> None:
+    def _publish_image(self, fid: str, stamp) -> None:
+        """Publish a pre-generated image file as-is (no drawing at runtime)."""
         if not self._img_pub:
             return
 
@@ -471,25 +512,6 @@ class InspectorNode(Node):
         if img is None:
             self.get_logger().warn(f'Could not read image: {img_path}')
             return
-
-        def _draw(boxes, color_map, default_color, thickness):
-            for box in boxes:
-                bbox = box.get('bbox2d')
-                if bbox is None:
-                    continue
-                x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
-                cls   = box.get('type', '')
-                score = box.get('score', 1.0)
-                r, g, b = color_map.get(cls, default_color)
-                # cv2 uses BGR
-                bgr = (int(b * 255), int(g * 255), int(r * 255))
-                cv2.rectangle(img, (x1, y1), (x2, y2), bgr, thickness)
-                label = f'{cls} {score:.2f}' if score < 1.0 else cls
-                cv2.putText(img, label, (x1, max(y1 - 4, 0)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, bgr, 1, cv2.LINE_AA)
-
-        _draw(gt_boxes,  _GT_COLOR,  _DEFAULT_GT_COLOR,  thickness=2)
-        _draw(det_boxes, _DET_COLOR, _DEFAULT_DET_COLOR, thickness=2)
 
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         h, w = img_rgb.shape[:2]
@@ -627,8 +649,12 @@ def main():
     g2.add_argument('--calib-dir', metavar='DIR',
                     help='KITTI calib directory (required for GT and detections)')
     g2.add_argument('--image-dir', metavar='DIR',
-                    help='KITTI image_2 directory (.png/.jpg); publishes annotated '
-                         'frames on /image/annotated with GT and detection box overlays')
+                    help='Directory of pre-generated annotated images (.png/.jpg) to '
+                         'publish on /image/annotated (e.g. gt_only/, det_only/, '
+                         'det_thresholded/ produced by generate_annotated_images.py)')
+    g2.add_argument('--threshold-config', metavar='FILE',
+                    help='YAML file with per-class confidence thresholds for 3D '
+                         'detection marker display (e.g. Car: 0.5, Pedestrian: 0.5)')
 
     g3 = parser.add_argument_group('pre-computed detections')
     g3.add_argument('--det-dir', metavar=('LABEL', 'DIR'), nargs=2, action='append',
