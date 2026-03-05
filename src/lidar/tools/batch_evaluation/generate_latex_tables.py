@@ -134,7 +134,7 @@ def main():
         sys.exit(1)
 
     run_root = Path(sys.argv[1])
-    models_root = run_root / "kitti_models"
+    models_root = run_root
 
     if not models_root.exists():
         print(f"Invalid path: {models_root}")

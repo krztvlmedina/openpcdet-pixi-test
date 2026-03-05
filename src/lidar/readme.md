@@ -139,3 +139,11 @@ La estructura facilita la comparación directa entre modelos y datasets
 Los scripts pueden extenderse para soportar otras métricas como bbox o BEV
 
 También es posible automatizar la generación de tablas para todos los datasets
+
+
+## Comparacion de nubes de puntos y bounding boxes
+
+En container velodyne_ros2, se puede usar el archivo kitti_inspector.py, que permite publicar frames de todas las bases generadas en simultaneo, de forma sencilla:
+
+
+pixi run python3 packages/pointcloud_utils/scripts/kitti_inspector.py --original-dir data/kitti/training/velodyne/ --reduced-dir data/reduced-kitti/training/velodyne/ --interp-dir "nearest_01" data/output/interpolated-kitti/nearest_01/training/velodyne/ --label-dir data/kitti/training/label_2/ --calib-dir data/kitti/training/calib/ --det-dir "second" data/output_runs/new-test/raw_results/desempeno_offline/original/kitti/second/default/eval/epoch_7862/val/default/final_result/data/

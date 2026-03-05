@@ -147,11 +147,13 @@ services:
       - ./data/config_files/interpolation/:/app/data/config_files/interpolation/:cached
       - ../datos/kitti/:/app/data/kitti:cached
       - ../datos/reduced-kitti/:/app/data/reduced-kitti:cached
+      - ../datos/output_runs/:/app/data/output_runs:ro
       # - ../datos/interpolated-kitti/:/app/data/output/interpolated-kitti:cached
       - /media/cristobalmedina/SAMSUNG/memoria/interpolated-kitti/:/app/data/output/interpolated-kitti:cached
 
       # - ./packages/dynamic_lidar_interpolation:/app/packages/dynamic_lidar_interpolation:cached
-      # - ./packages/pointcloud_utils:/app/packages/pointcloud_utils:cached
+      - ./packages/pointcloud_utils/scripts:/app/packages/pointcloud_utils/scripts:cached
+      - ./packages/pointcloud_utils/config/:/app/packages/pointcloud_utils/config:cached
       - ./pixi_confs/ros2.pixi.toml:/app/pixi.toml:cached
       - ./scripts/batch_downsample.sh:/app/scripts/batch_downsample.sh:cached
       - ./pixi_confs/dynamic_lidar_interpolation.pixi.toml:/app/packages/dynamic_lidar_interpolation/pixi.toml:cached

@@ -434,7 +434,7 @@ run_batch_eval() {
         # (the immediate parent dir name, e.g. "original", "downsampled",
         # "interpolated") and TAG from the file stem.  Output is therefore at:
         #   <ROOT>/output/<cfg_subdir>/<model_stem>/
-        local src="${OPC_ROOT}/output/${cfg_subdir}/${MODEL}"
+        local src="${OPC_ROOT}/output/OpenPCDet/src/lidar/tools/cfgs/kitti_models/${cfg_subdir}/${MODEL}"
         local dst="${dest_dir}/${dataset_label}/${MODEL}"
         docker exec "${CONTAINER_OPENPCDET}" bash -c \
             "mkdir -p '${dest_dir}/${dataset_label}' && \
@@ -510,7 +510,7 @@ run_latex() {
     docker exec "${CONTAINER_OPENPCDET}" bash -c \
         "mkdir -p '${OFFLINE_LATEX}' '${ONLINE_LATEX}'"
 
-    for variant in original downsampled; do
+    for variant in original/kitti downsampled/reduced; do
         local src="${OFFLINE_RAW}/${variant}"
         docker exec "${CONTAINER_OPENPCDET}" bash -c \
             "cd ${OPC_ROOT} && \
