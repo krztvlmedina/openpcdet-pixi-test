@@ -515,28 +515,43 @@ run_online_eval() {
 # All variants share GT labels/images from original-kitti (reduced and
 # interpolated datasets have the same labels, only different velodyne scans).
 run_annotated_images() {
-    local variant="$1"    # e.g. "original", "downsampled", "interpolated"
-    local dataset_label="$2"  # e.g. "kitti", "reduced", "nearest_01"
+    local variant="$1"       # e.g. "original", "downsampled", "interpolated"
+    local dataset_label="$2" # e.g. "kitti", "reduced", "nearest_01"
+    local gt_only="${3:-false}"  # "true" → only gt_only/ variant, no detections
     local image_dir="${OPC_KITTI_DATA}/training/image_2"
     local label_dir="${OPC_KITTI_DATA}/training/label_2"
     local annotated_root="${RESULTS_OPC}/annotated/${variant}/${dataset_label}"
 
+    if [[ "${gt_only}" == "true" ]]; then
+        # GT-only: single output directory, no model loop needed
+        log "  Annotating images (gt_only): ${variant}/${dataset_label}"
+        docker exec "${CONTAINER_OPENPCDET}" bash -c \
+            "python3 ${OPC_BATCH}/generate_annotated_images.py \
+                --image-dir  '${image_dir}' \
+                --label-dir  '${label_dir}' \
+                --output-dir '${annotated_root}'"
+        return
+    fi
+
     for MODEL in $(printf '%s\n' "${!MODELS[@]}" | sort); do
         [[ -n "${SINGLE_MODEL}" && "${MODEL}" != "${SINGLE_MODEL}" ]] && continue
-        local det_dir="${OFFLINE_RAW}/${variant}/${dataset_label}/${MODEL}/final_result/data"
         local out_dir="${annotated_root}/${MODEL}"
 
-        # Skip if detection results don't exist for this model
-        local has_dets
-        has_dets=$(docker exec "${CONTAINER_OPENPCDET}" bash -c \
-            "[ -d '${det_dir}' ] && echo yes || echo no")
-        [[ "${has_dets}" != "yes" ]] && continue
+        # OpenPCDet nests results under default/eval/epoch_<N>/val/default/final_result/data/
+        # so we locate the directory dynamically instead of hardcoding the depth.
+        local det_dir
+        det_dir=$(docker exec "${CONTAINER_OPENPCDET}" bash -c \
+            "find '${OFFLINE_RAW}/${variant}/${dataset_label}/${MODEL}' \
+                 -type d -path '*/final_result/data' 2>/dev/null | sort | tail -1")
+        if [[ -z "${det_dir}" ]]; then
+            log "  SKIP annotated images for ${variant}/${dataset_label}/${MODEL}: no final_result/data found"
+            continue
+        fi
 
         log "  Annotating images: ${variant}/${dataset_label}/${MODEL}"
         docker exec "${CONTAINER_OPENPCDET}" bash -c \
             "python3 ${OPC_BATCH}/generate_annotated_images.py \
                 --image-dir '${image_dir}' \
-                --label-dir '${label_dir}' \
                 --det-dir   '${det_dir}' \
                 --output-dir '${out_dir}' \
                 --threshold-config '${OPC_THRESHOLD_CONFIG}'"
@@ -545,21 +560,29 @@ run_annotated_images() {
 
 run_latex() {
     step "Step 6: Generating LaTeX tables and annotated images"
+    # Recreate all latex output dirs fresh
     docker exec "${CONTAINER_OPENPCDET}" bash -c \
-        "mkdir -p '${OFFLINE_LATEX}' '${ONLINE_LATEX}'"
+        "rm -rf  '${OFFLINE_LATEX}/original' \
+                 '${OFFLINE_LATEX}/downsampled' \
+                 '${OFFLINE_LATEX}/interpolated' \
+                 '${ONLINE_LATEX}' && \
+         mkdir -p '${OFFLINE_LATEX}/original/kitti' \
+                  '${OFFLINE_LATEX}/downsampled/reduced' \
+                  '${OFFLINE_LATEX}/interpolated' \
+                  '${ONLINE_LATEX}'"
 
     for variant in original/kitti downsampled/reduced; do
         local src="${OFFLINE_RAW}/${variant}"
         docker exec "${CONTAINER_OPENPCDET}" bash -c \
             "cd ${OPC_ROOT} && \
              python3 ${OPC_BATCH}/generate_latex_single_dataset.py '${src}' && \
-             mv '${src}/latex/'*.tex '${OFFLINE_LATEX}/' 2>/dev/null || true"
+             mv '${src}/latex/'*.tex '${OFFLINE_LATEX}/${variant}' 2>/dev/null || true"
     done
 
     docker exec "${CONTAINER_OPENPCDET}" bash -c \
         "cd ${OPC_ROOT} && \
          python3 ${OPC_BATCH}/generate_latex_tables.py '${OFFLINE_RAW}/interpolated' && \
-         mv '${OFFLINE_RAW}/interpolated/latex/'*.tex '${OFFLINE_LATEX}/' 2>/dev/null || true"
+         mv '${OFFLINE_RAW}/interpolated/latex/'*.tex '${OFFLINE_LATEX}/interpolated' 2>/dev/null || true"
 
     docker exec "${CONTAINER_OPENPCDET}" bash -c \
         "cd ${OPC_ROOT} && \
@@ -569,7 +592,7 @@ run_latex() {
     # Annotated images (skip if offline eval was skipped)
     if ! ${SKIP_OFFLINE}; then
         log "Generating annotated images..."
-        run_annotated_images "original"    "kitti"
+        run_annotated_images "original"    "kitti" "true"   # GT only
         run_annotated_images "downsampled" "reduced"
 
         local interp_configs
