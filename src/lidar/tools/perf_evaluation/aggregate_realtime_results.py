@@ -208,6 +208,22 @@ def generate_timing_chart(data: Dict[str, Dict[str, dict]], output_dir: Path):
         print("matplotlib not available, skipping chart generation.")
         return
 
+    # ── Compute global axis limits across ALL configs and models ─────────────
+    global_max_total_ms = 0.0
+    global_max_fps = 0.0
+    for models in data.values():
+        for model_name, summary in models.items():
+            m = summary["metrics"]
+            total = (m["interpolation_time_ms"]["mean"]
+                     + m["network_transfer_time_ms"]["mean"]
+                     + m["detection_time_ms"]["mean"])
+            global_max_total_ms = max(global_max_total_ms, total)
+            global_max_fps = max(global_max_fps, m["throughput_fps"]["mean"])
+
+    latency_ylim = global_max_total_ms * 1.18   # headroom for top labels
+    fps_ylim     = global_max_fps      * 1.18
+
+    # ── Per-config stacked latency breakdown charts ───────────────────────────
     for config_name, models in sorted(data.items()):
         model_names = []
         interp_times = []
@@ -231,26 +247,31 @@ def generate_timing_chart(data: Dict[str, Dict[str, dict]], output_dir: Path):
         x = range(len(model_names))
         width = 0.6
 
-        bars_interp = ax.bar(x, interp_times, width, label='Interpolation', color='#2196F3')
-        bars_network = ax.bar(x, network_times, width, bottom=interp_times, label='Network', color='#FF9800')
-        bars_detect = ax.bar(
+        ax.bar(x, interp_times, width, label='Interpolación', color='#2196F3')
+        ax.bar(x, network_times, width, bottom=interp_times,
+               label='Transferencia de red', color='#FF9800')
+        ax.bar(
             x, detect_times, width,
             bottom=[i + n for i, n in zip(interp_times, network_times)],
-            label='Detection', color='#4CAF50'
+            label='Detección', color='#4CAF50'
         )
 
-        ax.set_ylabel('Latency (ms)')
-        ax.set_title(f'Pipeline Latency Breakdown - {config_name}')
-        ax.set_xticks(x)
+        ax.set_ylabel('Latencia (ms)')
+        ax.set_title(f'Desglose de latencia del pipeline — {config_name}')
+        ax.set_xticks(list(x))
         ax.set_xticklabels(model_names, rotation=45, ha='right')
+        ax.set_ylim(0, latency_ylim)
+        ax.yaxis.set_major_locator(mticker.MultipleLocator(
+            max(20, round(global_max_total_ms / 8 / 10) * 10)
+        ))
         ax.legend()
-        ax.yaxis.set_major_locator(mticker.MultipleLocator(20))
         ax.grid(axis='y', alpha=0.3)
 
-        # Add total latency labels on top
+        # Total latency label on top of each bar
         for i, (interp, net, det) in enumerate(zip(interp_times, network_times, detect_times)):
             total = interp + net + det
-            ax.text(i, total + 2, f'{total:.0f}ms', ha='center', va='bottom', fontsize=9)
+            ax.text(i, total + latency_ylim * 0.01, f'{total:.0f} ms',
+                    ha='center', va='bottom', fontsize=9)
 
         plt.tight_layout()
         chart_path = output_dir / f"timing_breakdown_{config_name}.png"
@@ -258,8 +279,7 @@ def generate_timing_chart(data: Dict[str, Dict[str, dict]], output_dir: Path):
         plt.close()
         print(f"Generated chart: {chart_path}")
 
-    # Generate FPS comparison chart
-    fig, ax = plt.subplots(figsize=(10, 6))
+    # ── FPS comparison chart (all configs × all models) ───────────────────────
     config_names_list = sorted(data.keys())
     bar_width = 0.8 / max(len(config_names_list), 1)
     all_models = []
@@ -269,31 +289,28 @@ def generate_timing_chart(data: Dict[str, Dict[str, dict]], output_dir: Path):
                 all_models.append(mn)
 
     if all_models:
+        fig, ax = plt.subplots(figsize=(10, 6))
         x = range(len(all_models))
+
         for ci, config_name in enumerate(config_names_list):
-            fps_values = []
-            for model_name in all_models:
-                if model_name in data[config_name]:
-                    fps_values.append(data[config_name][model_name]["metrics"]["throughput_fps"]["mean"])
-                else:
-                    fps_values.append(0)
-
+            fps_values = [
+                data[config_name][mn]["metrics"]["throughput_fps"]["mean"]
+                if mn in data[config_name] else 0
+                for mn in all_models
+            ]
             offset = (ci - len(config_names_list) / 2 + 0.5) * bar_width
-            ax.bar(
-                [xi + offset for xi in x],
-                fps_values, bar_width,
-                label=config_name
-            )
+            ax.bar([xi + offset for xi in x], fps_values, bar_width, label=config_name)
 
-        ax.set_ylabel('Throughput (FPS)')
-        ax.set_title('Throughput Comparison')
-        ax.set_xticks(x)
+        ax.set_ylabel('Rendimiento (FPS)')
+        ax.set_title('Comparación de rendimiento')
+        ax.set_xticks(list(x))
         ax.set_xticklabels(
             [MODEL_DISPLAY_NAMES.get(m, m) for m in all_models],
             rotation=45, ha='right'
         )
+        ax.set_ylim(0, fps_ylim)
+        ax.axhline(y=10, color='r', linestyle='--', alpha=0.5, label='Objetivo 10 FPS')
         ax.legend()
-        ax.axhline(y=10, color='r', linestyle='--', alpha=0.5, label='10 FPS target')
         ax.grid(axis='y', alpha=0.3)
 
         plt.tight_layout()

@@ -527,6 +527,7 @@ run_annotated_images() {
         log "  Annotating images (gt_only): ${variant}/${dataset_label}"
         docker exec "${CONTAINER_OPENPCDET}" bash -c \
             "python3 ${OPC_BATCH}/generate_annotated_images.py \
+                --gt \
                 --image-dir  '${image_dir}' \
                 --label-dir  '${label_dir}' \
                 --output-dir '${annotated_root}'"
@@ -576,17 +577,20 @@ run_latex() {
         docker exec "${CONTAINER_OPENPCDET}" bash -c \
             "cd ${OPC_ROOT} && \
              python3 ${OPC_BATCH}/generate_latex_single_dataset.py '${src}' && \
+             mkdir -p '${OFFLINE_LATEX}/${variant}' && \
              mv '${src}/latex/'*.tex '${OFFLINE_LATEX}/${variant}' 2>/dev/null || true"
     done
 
     docker exec "${CONTAINER_OPENPCDET}" bash -c \
         "cd ${OPC_ROOT} && \
          python3 ${OPC_BATCH}/generate_latex_tables.py '${OFFLINE_RAW}/interpolated' && \
+         mkdir -p '${OFFLINE_LATEX}/interpolated' && \
          mv '${OFFLINE_RAW}/interpolated/latex/'*.tex '${OFFLINE_LATEX}/interpolated' 2>/dev/null || true"
 
     docker exec "${CONTAINER_OPENPCDET}" bash -c \
         "cd ${OPC_ROOT} && \
          python3 ${OPC_TOOLS}/perf_evaluation/aggregate_realtime_results.py '${ONLINE_RAW}' && \
+         mkdir -p '${ONLINE_LATEX}' && \
          cp '${ONLINE_RAW}/'*.csv '${ONLINE_LATEX}/' 2>/dev/null || true"
 
     # Annotated images (skip if offline eval was skipped)

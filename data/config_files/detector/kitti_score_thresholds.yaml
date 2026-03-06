@@ -3,6 +3,6 @@
 # variants and from 3D marker display in kitti_inspector.py.
 #
 # Default values match the KITTI benchmark evaluation protocol used by OpenPCDet.
-Car: 0.7
+Car: 0.3
 Pedestrian: 0.5
 Cyclist: 0.5

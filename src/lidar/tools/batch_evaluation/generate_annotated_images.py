@@ -138,8 +138,11 @@ def main():
     )
     parser.add_argument('--image-dir', required=True, metavar='DIR',
                         help='Source KITTI image_2 directory (.png/.jpg)')
+    parser.add_argument('--gt', action='store_true',
+                        help='Generate gt_only/ variant (requires --label-dir)')
     parser.add_argument('--label-dir', metavar='DIR',
-                        help='KITTI label_2 directory (ground-truth boxes)')
+                        help='KITTI label_2 directory (ground-truth boxes); '
+                             'only used when --gt is given')
     parser.add_argument('--det-dir', metavar='DIR',
                         help='Detection results directory (KITTI camera-format .txt '
                              'files, e.g. final_result/data from OpenPCDet)')
@@ -155,11 +158,14 @@ def main():
 
     image_dir  = Path(args.image_dir)
     output_dir = Path(args.output_dir)
-    label_dir  = Path(args.label_dir) if args.label_dir else None
-    det_dir    = Path(args.det_dir)   if args.det_dir   else None
+    det_dir    = Path(args.det_dir) if args.det_dir else None
 
-    if label_dir is None and det_dir is None:
-        parser.error('Provide at least one of --label-dir or --det-dir.')
+    if args.gt and not args.label_dir:
+        parser.error('--gt requires --label-dir.')
+    label_dir = Path(args.label_dir) if (args.gt and args.label_dir) else None
+
+    if not args.gt and det_dir is None:
+        parser.error('Provide --det-dir, or --gt with --label-dir.')
 
     # Load thresholds
     thresholds: Dict[str, float] = {}
@@ -177,7 +183,7 @@ def main():
     out_det   = output_dir / 'det_only'
     out_thr   = output_dir / 'det_thresholded'
 
-    if label_dir:
+    if label_dir:  # only when --gt was passed
         out_gt.mkdir(parents=True, exist_ok=True)
     if det_dir:
         out_det.mkdir(parents=True, exist_ok=True)
