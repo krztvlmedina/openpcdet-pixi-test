@@ -224,6 +224,11 @@ def main():
         # ── det_only & det_thresholded ────────────────────────────────────────
         if det_dir:
             dp = det_dir / f'{fid}.txt'
+
+            if not dp.exists():
+                print(f'  WARNING: detection file not found for frame {fid} ({dp})',
+                      file=sys.stderr)
+                continue
             det_boxes = _parse_kitti_boxes(dp, score_field=True) if dp.exists() else []
 
             # det_only — all detections regardless of score
