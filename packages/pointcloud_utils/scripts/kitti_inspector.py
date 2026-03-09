@@ -186,9 +186,11 @@ def _parse_kitti_boxes(txt_path: Path, calib: Optional['KittiCalib'],
                 x, y, z, ry = float(parts[11]), float(parts[12]), float(parts[13]), float(parts[14])
                 score        = float(parts[15]) if (score_field and len(parts) > 15) else 1.0
 
+                # (x, y, z) is the bottom-face center in rectified camera coords
+                # (y points down).  Subtract h/2 here to get the geometric centre
+                # before transforming — no further correction needed after.
                 center_cam = np.array([[x, y - h / 2, z]])
                 center_lid = calib.rect_to_lidar(center_cam)[0]
-                center_lid[2] += h / 2
                 heading = -(np.pi / 2 + ry)
 
                 boxes.append({
